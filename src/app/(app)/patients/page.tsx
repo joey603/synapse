@@ -1,0 +1,100 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { Suspense } from "react";
+
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PatientListRow } from "@/components/ui/PatientListRow";
+import { SearchField } from "@/components/ui/SearchField";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { SurfaceCard } from "@/components/ui/SurfaceCard";
+import { db } from "@/lib/db";
+import { resolveLocale } from "@/lib/i18n/locale";
+import { t } from "@/lib/i18n/messages";
+import type { PatientStatus } from "@prisma/client";
+
+export default async function PatientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; tab?: string }>;
+}) {
+  const store = await cookies();
+  const locale = resolveLocale(store.get("synapse_locale")?.value);
+  const { q = "", tab = "active" } = await searchParams;
+  const query = q.trim();
+
+  const statusFilter: PatientStatus | undefined =
+    tab === "all" ? undefined : tab === "pending" ? "ACTIVE" : "ACTIVE";
+
+  const patients = await db.patient.findMany({
+    where: {
+      ...(statusFilter ? { status: statusFilter } : {}),
+      ...(query
+        ? {
+            OR: [
+              { firstName: { contains: query, mode: "insensitive" } },
+              { lastName: { contains: query, mode: "insensitive" } },
+              { city: { contains: query, mode: "insensitive" } },
+              { phone: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+  });
+
+  const activeCount = await db.patient.count({ where: { status: "ACTIVE" } });
+
+  return (
+    <div className="flex flex-col gap-5">
+      <header>
+        <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "patientsTitle")}</h1>
+        <p className="mt-1 text-[15px] text-muted">
+          {activeCount} {t(locale, "statPatients").toLocaleLowerCase()}
+        </p>
+      </header>
+
+      <Link
+        href="/patients/new"
+        className="flex min-h-12 items-center justify-center rounded-2xl bg-accent text-base font-semibold text-white"
+      >
+        {t(locale, "newPatient")}
+      </Link>
+
+      <SearchField locale={locale} defaultValue={query} />
+
+      <Suspense fallback={null}>
+        <SegmentedControl
+          segments={[
+            { id: "active", label: t(locale, "tabActive"), href: "/patients?tab=active" },
+            { id: "all", label: t(locale, "tabAll"), href: "/patients?tab=all" },
+          ]}
+        />
+      </Suspense>
+
+      {patients.length === 0 ? (
+        <EmptyState title={t(locale, "patientsEmpty")} body={t(locale, "patientsHint")} />
+      ) : (
+        <SurfaceCard>
+          {patients.map((patient, index) => {
+            const name = `${patient.firstName} ${patient.lastName}`;
+            const meta = [patient.city, patient.primaryDiagnosis].filter(Boolean).join(" • ");
+            const badge =
+              patient.status === "ACTIVE" ? t(locale, "patientActive") : t(locale, "patientInactive");
+
+            return (
+              <div key={patient.id}>
+                {index > 0 ? <div className="border-t border-line/70" /> : null}
+                <PatientListRow
+                  href={`/patients/${patient.id}`}
+                  name={name}
+                  meta={meta || badge}
+                  badge={meta ? badge : undefined}
+                />
+              </div>
+            );
+          })}
+        </SurfaceCard>
+      )}
+    </div>
+  );
+}

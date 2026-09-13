@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  NURSE
+  ADMIN
+}
+
+enum PatientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  UNSPECIFIED
+}
+
+enum VisitType {
+  IN_PERSON
+  VIRTUAL
+  PHONE
+  ADMISSION
+  ASSESSMENT
+  FAMILY_CONTACT
+  OTHER
+}
+
+enum PipelineStatus {
+  IDLE
+  UPLOADED
+  TRANSCRIBING
+  TRANSCRIBED
+  EXTRACTING
+  EXTRACTED
+  GENERATING
+  READY
+  FAILED
+}
+
+enum ReportStatus {
+  DRAFT
+  AI_GENERATED
+  REVIEWED
+  VALIDATED
+}
+
+enum RetentionPolicy {
+  KEEP
+  DELETE_AFTER_TRANSCRIPTION
+  EXPIRE_AT
+}
+
+enum AudioStatus {
+  STORED
+  DELETED
+}
+
+model User {
+  id               String           @id @default(cuid())
+  email            String           @unique
+  name             String
+  passwordHash     String
+  role             UserRole         @default(NURSE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  sessions         Session[]
+  auditLogs        AuditLog[]
+  validatedReports ClinicalReport[] @relation("ValidatedBy")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Patient {
+  id                    String        @id @default(cuid())
+  firstName             String
+  lastName              String
+  birthDate             DateTime?     @db.Date
+  sex                   Sex           @default(UNSPECIFIED)
+  phone                 String?
+  city                  String?
+  address               String?
+  contactName           String?
+  contactPhone          String?
+  insurer               String?
+  referringPsychiatrist String?
+  referringNurse        String?
+  admittedAt            DateTime?     @db.Date
+  status                PatientStatus @default(ACTIVE)
+
+  primaryDiagnosis      String?
+  secondaryDiagnoses    String?
+  psychHistory          String?
+  somaticHistory        String?
+  suicideHistory        String?
+  addictions            String?
+  allergies             String?
+  riskFactors           String?
+  protectiveFactors     String?
+  currentSummary        String?
+  currentTreatmentNote  String?
+
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  visits                Visit[]
+  medications           Medication[]
+  auditLogs             AuditLog[]
+
+  @@index([status])
+  @@index([lastName, firstName])
+  @@index([city])
+  @@index([phone])
+}
+
+model Visit {
+  id             String         @id @default(cuid())
+  patientId      String
+  type           VisitType
+  occurredAt     DateTime
+  notes          String?
+  pipelineStatus PipelineStatus @default(IDLE)
+  failureCode    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  patient        Patient              @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  recording      AudioRecording?
+  transcript     Transcript?
+  extraction     ClinicalExtraction?
+  report         ClinicalReport?
+  auditLogs      AuditLog[]
+
+  @@index([patientId, occurredAt])
+  @@index([pipelineStatus])
+}
+
+model AudioRecording {
+  id                  String          @id @default(cuid())
+  visitId             String          @unique
+  storageKey          String          @unique
+  originalFilename    String?
+  mimeType            String
+  sizeBytes           Int
+  durationSeconds     Int?
+  retentionPolicy     RetentionPolicy @default(KEEP)
+  expiresAt           DateTime?
+  status              AudioStatus     @default(STORED)
+  consentAcknowledged Boolean         @default(false)
+  deletedAt           DateTime?
+  createdAt           DateTime        @default(now())
+
+  visit               Visit           @relation(fields: [visitId], references: [id], onDelete: Restrict)
+}
+
+model Transcript {
+  id               String   @id @default(cuid())
+  visitId          String   @unique
+  detectedLanguage String?
+  rawText          String
+  provider         String
+  model            String
+  promptVersion    String?
+  speakerData      Json?
+  createdAt        DateTime @default(now())
+
+  visit            Visit    @relation(fields: [visitId], references: [id], onDelete: Restrict)
+}
+
+model ClinicalExtraction {
+  id            String   @id @default(cuid())
+  visitId       String   @unique
+  schemaVersion String
+  promptVersion String
+  provider      String
+  model         String
+  payload       Json
+  createdAt     DateTime @default(now())
+
+  visit         Visit    @relation(fields: [visitId], references: [id], onDelete: Restrict)
+}
+
+model ClinicalReport {
+  id            String       @id @default(cuid())
+  visitId       String       @unique
+  status        ReportStatus @default(DRAFT)
+  templateKey   String
+  promptVersion String?
+  provider      String?
+  model         String?
+  aiDraft       String?
+  editedDraft   String?
+  finalText     String?
+  validatedAt   DateTime?
+  validatedById String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  visit         Visit        @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  validatedBy   User?        @relation("ValidatedBy", fields: [validatedById], references: [id])
+
+  @@index([status])
+}
+
+model Medication {
+  id        String    @id @default(cuid())
+  patientId String
+  name      String
+  dose      String?
+  frequency String?
+  route     String?
+  startedAt DateTime? @db.Date
+  active    Boolean   @default(true)
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([patientId, active])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  patientId  String?
+  visitId    String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  patient    Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  visit      Visit?   @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([patientId, createdAt])
+  @@index([visitId, createdAt])
+  @@index([actorId, createdAt])
+}

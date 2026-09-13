@@ -1,0 +1,23 @@
+# Postgres local de développement uniquement.
+# Le port 5433 évite le conflit avec un PostgreSQL déjà présent sur 5432.
+# Mot de passe local, à ne jamais réutiliser en production.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: synapse
+      POSTGRES_DB: synapse
+    ports:
+      - "5433:5432"
+    volumes:
+      - synapse_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  synapse_pg:

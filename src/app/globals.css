@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-heebo), "Arial Hebrew", "Noto Sans Hebrew", Arial, sans-serif;
+  --color-ink: #1b2430;
+  --color-muted: #667085;
+  --color-faint: #98a2b3;
+  --color-surface: #f3f5f8;
+  --color-card: #ffffff;
+  --color-line: #e8ecf1;
+  --color-accent: #0e6b63;
+  --color-accent-strong: #0a534d;
+  --color-accent-soft: #e7f3f1;
+  --color-danger: #8d3b3b;
+  --color-danger-soft: #f8eeee;
+}
+
+html {
+  background: var(--color-surface);
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
