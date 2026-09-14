@@ -1,23 +1,43 @@
 import { NOT_ASSESSED_HE } from "@/lib/clinical/forbidden-phrases";
 import type { ClinicalFact, FactDomain, StoredExtraction } from "@/lib/clinical/types";
-import { RISK_DOMAINS } from "@/lib/clinical/types";
+import { CLINICAL_DOMAINS, EXAM_DOMAINS, RISK_DOMAINS } from "@/lib/clinical/types";
 import { templateKeyFor } from "@/lib/clinical/templates";
 import type { VisitType } from "@prisma/client";
 
 const DOMAIN_HE: Partial<Record<FactDomain, string>> = {
   mood: "מצב רוח",
+  affect: "אפקט",
+  anxiety: "חרדה",
   sleep: "שינה",
   appetite: "תיאבון",
-  anxiety: "חרדה",
-  adherence: "היענות",
-  family: "משפחה",
+  activity: "פעילות",
   functioning: "תפקוד",
+  work: "עבודה",
+  family: "משפחה",
+  isolation: "בידוד",
+  speech: "דיבור",
+  thought: "מהלך חשיבה",
+  thoughtContent: "תוכן חשיבה",
+  delusions: "מחשבות שווא",
+  hallucinations: "הזיות",
+  agitation: "אי-שקט",
+  retardation: "האטה",
+  insight: "תובנה",
+  judgment: "שיפוט",
+  behavior: "התנהגות",
+  adherence: "היענות",
 };
 
 const RISK_HE: Record<(typeof RISK_DOMAINS)[number], string> = {
-  suicidality: "אובדנות",
+  suicidality: "מחשבות אובדניות",
+  suicideIntent: "כוונה אובדנית",
+  suicidePlan: "תכנית אובדנית",
+  recentSuicidalBehavior: "התנהגות אובדנית לאחרונה",
+  selfHarm: "פגיעה עצמית",
   psychosis: "פסיכוזה",
   aggression: "אלימות כלפי אחר",
+  impulsivity: "אימפולסיביות",
+  dangerousness: "מסוכנות",
   substanceUse: "שימוש בחומרים",
   sideEffects: "תופעות לוואי",
 };
@@ -49,15 +69,18 @@ export function composeReport(input: {
 
   blocks.push(block(titleFor(key), `בוצע ${VISIT_HE[input.visitType]} בתאריך ${date}.`));
 
-  const clinical = currentSentences(input.extraction);
+  const clinical = sentencesFor(input.extraction, CLINICAL_DOMAINS);
   if (clinical.length > 0) blocks.push(block("מצב קליני", clinical.join(" ")));
+
+  const exam = sentencesFor(input.extraction, EXAM_DOMAINS);
+  if (exam.length > 0 && key !== "short") blocks.push(block("בדיקה פסיכיאטרית", exam.join(" ")));
 
   if (input.extraction.changes.length > 0) {
     blocks.push(block("שינוי מול ביקור מאומת קודם", "יש פער מול ביקור מאומת קודם. לבדוק, לא כממצא של היום בלבד."));
   }
 
   const meds = input.extraction.medicationMentions
-    .filter((fact) => fact.assertion === "present" && fact.temporality === "current_visit")
+    .filter((fact) => fact.assertion === "present" && fact.temporality === "current_visit" && fact.source === "transcript")
     .map((fact) => sentence(fact))
     .filter(Boolean);
   if (meds.length > 0 && key !== "short") blocks.push(block("טיפול", meds.join(" ")));
@@ -73,10 +96,10 @@ function titleFor(key: string) {
   return "פרטי הביקור";
 }
 
-function currentSentences(extraction: StoredExtraction) {
+function sentencesFor(extraction: StoredExtraction, domains: readonly FactDomain[]) {
   const sentences: string[] = [];
-  for (const [domain, fact] of Object.entries(extraction.facts) as Array<[FactDomain, ClinicalFact]>) {
-    if (RISK_DOMAINS.includes(domain as (typeof RISK_DOMAINS)[number])) continue;
+  for (const domain of domains) {
+    const fact = extraction.facts[domain];
     if (!isCurrentPresent(fact)) continue;
     const label = DOMAIN_HE[domain];
     const body = sentence(fact);
@@ -94,11 +117,11 @@ function riskSentences(extraction: StoredExtraction) {
 }
 
 function riskPhrase(fact: ClinicalFact) {
-  if (fact.assertion === "explicitly_denied" && fact.evidence?.quote) {
-    return `נמסר במפורש: «${fact.evidence.quote}»`;
+  if (fact.assertion === "explicitly_denied" && fact.evidence?.quote && fact.source === "transcript") {
+    return `נשלל במפורש במפגש זה. נמסר: «${fact.evidence.quote}»`;
   }
-  if (fact.assertion === "present" && fact.evidence?.quote) {
-    return `לאימות. נמסר: «${fact.evidence.quote}»`;
+  if (fact.assertion === "present" && fact.evidence?.quote && fact.source === "transcript") {
+    return `דווח במפגש זה. נמסר: «${fact.evidence.quote}»`;
   }
   if (fact.assertion === "uncertain") return "לאימות. לא נרשם כממצא.";
   if (fact.assertion === "not_reported") return "הנושא עלה, ללא נתון שניתן לתעד.";

@@ -51,11 +51,6 @@ async function removeRecording(
     return NextResponse.redirect(appUrl(request, back), 303);
   }
 
-  const form = await request.formData().catch(() => null);
-  if (form?.get("confirmDelete") !== "on") {
-    return NextResponse.redirect(appUrl(request, `${back}?audio=confirm#audio`), 303);
-  }
-
   try {
     await getStorage().delete(recording.storageKey);
     await db.$transaction(async (tx) => {

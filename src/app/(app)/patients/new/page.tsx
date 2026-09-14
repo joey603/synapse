@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import { PatientForm } from "@/components/patient/PatientForm";
+import { BackChevron } from "@/components/ui/BackChevron";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 
@@ -16,7 +17,8 @@ export default async function NewPatientPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <Link href="/patients" className="inline-flex min-h-10 items-center text-sm font-medium text-muted">
+      <Link href="/patients" className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted">
+        <BackChevron locale={locale} />
         {t(locale, "backToPatients")}
       </Link>
       <header>

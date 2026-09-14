@@ -19,32 +19,48 @@ import { PROMPT_VERSION as REPORT_PROMPT } from "../../../prompts/nursing-report
 
 const running = new Set<string>();
 
-export async function startPipeline(visitId: string, actorId: string) {
+export async function startPipeline(
+  visitId: string,
+  actorId: string,
+  mode: "transcribe" | "analyze" = "transcribe",
+) {
   if (running.has(visitId)) return;
   running.add(visitId);
   try {
-    await runPipeline(visitId, actorId);
+    await runPipeline(visitId, actorId, mode);
   } finally {
     running.delete(visitId);
   }
 }
 
-async function runPipeline(visitId: string, actorId: string) {
+async function runPipeline(visitId: string, actorId: string, mode: "transcribe" | "analyze") {
   const visit = await db.visit.findUnique({
     where: { id: visitId },
     include: { recording: true, transcript: true, extraction: true, report: true, patient: true },
   });
   if (!visit) return;
+  if (visit.report?.status === "VALIDATED") return;
 
   try {
-    if (!visit.transcript) {
-      await transcribe(visit, actorId);
+    if (mode === "transcribe") {
+      if (!visit.transcript) await transcribe(visit, actorId);
+      return;
     }
-    const afterTranscript = await reload(visitId);
-    if (!afterTranscript?.transcript) return;
-    if (!afterTranscript.extraction) {
-      await extract(afterTranscript, actorId);
+
+    const ready = visit.transcript ? visit : await reload(visitId);
+    if (!ready?.transcript) return;
+    if (ready.extraction) {
+      await db.clinicalExtraction.delete({ where: { visitId } });
     }
+    if (ready.report?.aiDraft) {
+      await db.clinicalReport.update({
+        where: { visitId },
+        data: { aiDraft: null },
+      });
+    }
+    const cleared = await reload(visitId);
+    if (!cleared?.transcript) return;
+    await extract(cleared, actorId);
     const afterExtract = await reload(visitId);
     if (!afterExtract?.extraction || !afterExtract.report) return;
     if (!afterExtract.report.aiDraft) {
@@ -106,6 +122,7 @@ async function transcribe(
     data: {
       visitId: visit.id,
       rawText: result.text,
+      providerText: result.text,
       detectedLanguage: result.detectedLanguage,
       provider: providerName(),
       model: result.model,

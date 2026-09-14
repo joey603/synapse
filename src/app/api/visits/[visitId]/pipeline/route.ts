@@ -41,6 +41,19 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
   if (session.status !== "ok") return NextResponse.redirect(appUrl(request, "/login"), 303);
   if (!visit) return NextResponse.redirect(appUrl(request, "/patients"), 303);
 
-  void startPipeline(visit.id, session.user.id).catch(() => logger.error("pipeline.failed"));
-  return NextResponse.redirect(appUrl(request, `${back}?run=1`), 303);
+  const form = await request.formData().catch(() => null);
+  const mode = form?.get("mode") === "analyze" ? "analyze" : "transcribe";
+  const report = await db.clinicalReport.findUnique({
+    where: { visitId: visit.id },
+    select: { status: true },
+  });
+  if (report?.status === "VALIDATED") {
+    return NextResponse.redirect(appUrl(request, back), 303);
+  }
+  if (mode === "analyze" && report?.status === "REVIEWED" && form?.get("confirm") !== "on") {
+    return NextResponse.redirect(appUrl(request, `${back}?tab=analysis&pipe=confirm`), 303);
+  }
+
+  void startPipeline(visit.id, session.user.id, mode).catch(() => logger.error("pipeline.failed"));
+  return NextResponse.redirect(appUrl(request, `${back}?run=1&tab=${mode === "analyze" ? "analysis" : "transcript"}`), 303);
 }

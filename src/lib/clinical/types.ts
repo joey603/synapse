@@ -25,6 +25,10 @@ export const FACT_DOMAINS = [
   "sideEffects",
   "substanceUse",
   "suicidality",
+  "suicideIntent",
+  "suicidePlan",
+  "recentSuicidalBehavior",
+  "selfHarm",
   "aggression",
   "dangerousness",
   "protectiveFactors",
@@ -34,10 +38,42 @@ export type FactDomain = (typeof FACT_DOMAINS)[number];
 
 export const RISK_DOMAINS = [
   "suicidality",
+  "suicideIntent",
+  "suicidePlan",
+  "recentSuicidalBehavior",
+  "selfHarm",
   "psychosis",
   "aggression",
+  "impulsivity",
+  "dangerousness",
   "substanceUse",
   "sideEffects",
+] as const satisfies readonly FactDomain[];
+
+export const CLINICAL_DOMAINS = [
+  "mood",
+  "affect",
+  "anxiety",
+  "sleep",
+  "appetite",
+  "activity",
+  "functioning",
+  "work",
+  "isolation",
+  "family",
+] as const satisfies readonly FactDomain[];
+
+export const EXAM_DOMAINS = [
+  "behavior",
+  "speech",
+  "thought",
+  "thoughtContent",
+  "delusions",
+  "hallucinations",
+  "agitation",
+  "retardation",
+  "insight",
+  "judgment",
 ] as const satisfies readonly FactDomain[];
 
 export type Assertion = "present" | "explicitly_denied" | "not_assessed" | "not_reported" | "uncertain";
