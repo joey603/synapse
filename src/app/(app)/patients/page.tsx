@@ -44,9 +44,9 @@ export default async function PatientsPage({
 
   return (
     <div className="absolute inset-x-5 top-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] flex min-h-0 flex-col gap-4 overflow-hidden">
-      <header>
+      <header className="flex items-baseline justify-between gap-3">
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "patientsTitle")}</h1>
-        <p className="mt-1 text-sm font-medium tabular-nums text-muted">
+        <p className="shrink-0 text-sm font-medium tabular-nums text-muted">
           {patients.length} {t(locale, patients.length === 1 ? "patientCountOne" : "patientCountMany")}
         </p>
       </header>
