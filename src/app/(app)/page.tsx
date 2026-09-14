@@ -19,8 +19,7 @@ export default async function HomePage() {
   const { start, end } = jerusalemDayBounds();
 
   const now = new Date();
-  const [activePatients, visitsToday, toValidate, nextVisit] = await Promise.all([
-    db.patient.count({ where: { status: "ACTIVE" } }),
+  const [visitsToday, toValidate, nextVisit] = await Promise.all([
     db.visit.count({ where: { occurredAt: { gte: start, lt: end } } }),
     db.clinicalReport.count({
       where: { status: { in: ["AI_GENERATED", "REVIEWED"] } },
@@ -63,9 +62,6 @@ export default async function HomePage() {
           <h1 className="mt-1 text-[1.75rem] font-semibold leading-tight">
             {name ? `${t(locale, "greeting")}, ${firstName(name)}` : t(locale, "greeting")}
           </h1>
-          <p className="mt-2 text-sm text-muted">
-            {activePatients} {t(locale, "statPatients").toLocaleLowerCase()}
-          </p>
         </div>
       </header>
 
@@ -136,7 +132,6 @@ export default async function HomePage() {
         </SurfaceCard>
       </section>
 
-      <p className="text-center text-xs leading-5 text-faint">{t(locale, "shellNote")}</p>
     </div>
   );
 }

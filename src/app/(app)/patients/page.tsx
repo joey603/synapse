@@ -42,15 +42,10 @@ export default async function PatientsPage({
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
 
-  const activeCount = await db.patient.count({ where: { status: "ACTIVE" } });
-
   return (
     <div className="flex flex-col gap-5">
       <header>
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "patientsTitle")}</h1>
-        <p className="mt-1 text-[15px] text-muted">
-          {activeCount} {t(locale, "statPatients").toLocaleLowerCase()}
-        </p>
       </header>
 
       <Link
@@ -78,8 +73,8 @@ export default async function PatientsPage({
           {patients.map((patient, index) => {
             const name = `${patient.firstName} ${patient.lastName}`;
             const meta = [patient.city, patient.primaryDiagnosis].filter(Boolean).join(" • ");
-            const badge =
-              patient.status === "ACTIVE" ? t(locale, "patientActive") : t(locale, "patientInactive");
+            const inactive = patient.status !== "ACTIVE";
+            const badge = inactive ? t(locale, "patientInactive") : t(locale, "patientActive");
 
             return (
               <div key={patient.id}>
@@ -89,6 +84,7 @@ export default async function PatientsPage({
                   name={name}
                   meta={meta || badge}
                   badge={meta ? badge : undefined}
+                  badgeTone={inactive ? "danger" : "accent"}
                 />
               </div>
             );

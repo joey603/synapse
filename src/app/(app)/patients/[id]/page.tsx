@@ -67,7 +67,11 @@ export default async function PatientDetailPage({
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold leading-tight text-ink">{fullName}</h1>
             {meta ? <p className="mt-1 text-sm text-muted">{meta}</p> : null}
-            <span className="mt-2 inline-flex rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
+            <span
+              className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                patient.status === "ACTIVE" ? "bg-accent-soft text-accent" : "bg-danger-soft text-danger"
+              }`}
+            >
               {statusLabel}
             </span>
           </div>

@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { assertStorageKey } from "@/lib/storage/key";
 import type { StorageService } from "@/lib/storage/types";
 
 const ROOT = path.resolve(process.cwd(), "storage");
@@ -23,9 +24,7 @@ export const localStorage: StorageService = {
 };
 
 function resolveKey(key: string) {
-  if (!/^audio\/[0-9a-f-]{36}$/i.test(key)) {
-    throw new Error("storage.key_invalid");
-  }
+  assertStorageKey(key);
   const full = path.resolve(ROOT, key);
   if (full !== path.join(ROOT, key)) {
     throw new Error("storage.key_invalid");

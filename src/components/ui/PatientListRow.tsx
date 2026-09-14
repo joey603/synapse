@@ -7,11 +7,13 @@ export function PatientListRow({
   name,
   meta,
   badge,
+  badgeTone = "accent",
 }: {
   href: string;
   name: string;
   meta: string;
   badge?: string;
+  badgeTone?: "accent" | "danger";
 }) {
   return (
     <Link
@@ -23,7 +25,11 @@ export function PatientListRow({
         <p className="truncate text-[15px] font-semibold text-ink">{name}</p>
         <p className="truncate text-sm text-muted">{meta}</p>
         {badge ? (
-          <span className="mt-1.5 inline-flex rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">
+          <span
+            className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+              badgeTone === "danger" ? "bg-danger-soft text-danger" : "bg-accent-soft text-accent"
+            }`}
+          >
             {badge}
           </span>
         ) : null}
