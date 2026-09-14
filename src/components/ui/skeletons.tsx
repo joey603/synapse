@@ -92,7 +92,7 @@ async function label() {
 
 export async function HomeLoading() {
   return (
-    <Shell label={await label()} className="gap-6">
+    <Shell label={await label()} className="-mx-1 flex-1 justify-between gap-6">
       <div>
         <Bone className="h-4 w-28 rounded-full" />
         <Bone className="mt-2 h-8 w-44 rounded-2xl" />

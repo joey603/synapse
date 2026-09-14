@@ -37,7 +37,7 @@ export function AppShell({
           </div>
         </div>
       </div>
-      <main className="flex-1 px-5 pb-36 pt-3">{children}</main>
+      <main className="flex flex-1 flex-col px-5 pb-36 pt-3">{children}</main>
       <BottomNav locale={locale} />
     </div>
   );

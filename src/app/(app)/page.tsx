@@ -49,7 +49,7 @@ export default async function HomePage() {
   ];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="-mx-1 flex flex-1 flex-col justify-between gap-6">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-muted">{capitalize(dateLabel)}</p>
