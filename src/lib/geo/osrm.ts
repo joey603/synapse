@@ -11,7 +11,7 @@ export async function nearestRoad(point: { lat: number; lng: number }) {
   const hit = body.waypoints?.[0];
   const lng = hit?.location?.[0];
   const lat = hit?.location?.[1];
-  if (body.code !== "Ok" || lng == null || lat == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+  if (!hit || body.code !== "Ok" || lng == null || lat == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
     throw new Error("nearest_body");
   }
   const distance = hit.distance ?? 0;
