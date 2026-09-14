@@ -43,7 +43,7 @@ export default async function PatientsPage({
   });
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="absolute inset-x-5 top-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] flex min-h-0 flex-col gap-4 overflow-hidden">
       <header>
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "patientsTitle")}</h1>
         <p className="mt-1 text-sm font-medium tabular-nums text-muted">
@@ -69,35 +69,39 @@ export default async function PatientsPage({
         />
       </Suspense>
 
-      {patients.length === 0 ? (
-        <EmptyState title={t(locale, "patientsEmpty")} body={t(locale, "patientsHint")} />
-      ) : (
-        <SurfaceCard>
-          {patients.map((patient, index) => {
-            const name = `${patient.firstName} ${patient.lastName}`;
-            const meta = [patient.city, patient.primaryDiagnosis].filter(Boolean).join(" • ");
-            const badge =
-              patient.status === "DISCHARGED"
-                ? t(locale, "patientDischarged")
-                : patient.status === "INACTIVE"
-                  ? t(locale, "patientInactive")
-                  : t(locale, "patientActive");
+      <div className="min-h-0 flex-1 overflow-hidden rounded-3xl">
+        {patients.length === 0 ? (
+          <EmptyState title={t(locale, "patientsEmpty")} body={t(locale, "patientsHint")} />
+        ) : (
+          <div className="patient-scroll h-full overflow-y-auto overscroll-contain">
+            <SurfaceCard className="min-h-full">
+            {patients.map((patient, index) => {
+              const name = `${patient.firstName} ${patient.lastName}`;
+              const meta = [patient.city, patient.primaryDiagnosis].filter(Boolean).join(" • ");
+              const badge =
+                patient.status === "DISCHARGED"
+                  ? t(locale, "patientDischarged")
+                  : patient.status === "INACTIVE"
+                    ? t(locale, "patientInactive")
+                    : t(locale, "patientActive");
 
-            return (
-              <div key={patient.id}>
-                {index > 0 ? <div className="border-t border-line/70" /> : null}
-                <PatientListRow
-                  href={`/patients/${patient.id}`}
-                  name={name}
-                  meta={meta || badge}
-                  badge={meta ? badge : undefined}
-                  badgeTone={patient.status === "ACTIVE" ? "success" : patient.status === "DISCHARGED" ? "muted" : "danger"}
-                />
-              </div>
-            );
-          })}
-        </SurfaceCard>
-      )}
+              return (
+                <div key={patient.id}>
+                  {index > 0 ? <div className="border-t border-line/70" /> : null}
+                  <PatientListRow
+                    href={`/patients/${patient.id}`}
+                    name={name}
+                    meta={meta || badge}
+                    badge={meta ? badge : undefined}
+                    badgeTone={patient.status === "ACTIVE" ? "success" : patient.status === "DISCHARGED" ? "muted" : "danger"}
+                  />
+                </div>
+              );
+            })}
+            </SurfaceCard>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -71,6 +71,20 @@ input {
   border: none;
 }
 
+.patient-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #c9bfb2 transparent;
+}
+
+.patient-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.patient-scroll::-webkit-scrollbar-thumb {
+  background: #c9bfb2;
+  border-radius: 999px;
+}
+
 @keyframes synapse-loading {
   0% {
     transform: translateX(-120%);

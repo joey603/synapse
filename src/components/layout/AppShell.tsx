@@ -18,7 +18,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col bg-surface">
+    <div className="mx-auto flex h-dvh w-full max-w-lg flex-col overflow-hidden bg-surface">
       <RouteProgress label={t(locale, "loading")} />
       <div className="px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div dir="ltr" className="grid grid-cols-[1fr_auto_1fr] items-center rounded-3xl border border-line/80 bg-card px-4 py-2 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
@@ -37,7 +37,7 @@ export function AppShell({
           </div>
         </div>
       </div>
-      <main className="flex flex-1 flex-col px-5 pb-36 pt-3">{children}</main>
+      <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-36 pt-3">{children}</main>
       <BottomNav locale={locale} />
     </div>
   );
