@@ -92,32 +92,40 @@ async function label() {
 
 export async function HomeLoading() {
   return (
-    <Shell label={await label()} className="-mx-1 flex-1 justify-between gap-6">
+    <Shell label={await label()} className="-mx-1 flex-1 justify-between gap-3">
       <div>
         <Bone className="h-4 w-28 rounded-full" />
-        <Bone className="mt-2 h-8 w-44 rounded-2xl" />
+        <Bone className="mt-1 h-7 w-44 rounded-2xl" />
       </div>
-      <div className={`${card} flex items-center gap-4 p-4`}>
-        <Bone className="h-14 w-14 shrink-0 rounded-2xl" />
+      <div className={`${card} flex items-center gap-3 p-3`}>
+        <Bone className="h-12 w-12 shrink-0 rounded-2xl" />
         <div className="min-w-0 flex-1">
           <Bone className="h-3 w-20 rounded-full" />
-          <Bone className="mt-2 h-4 w-36 rounded-full" />
-          <Bone className="mt-2 h-3.5 w-28 rounded-full" />
+          <Bone className="mt-1.5 h-4 w-36 rounded-full" />
+          <Bone className="mt-1.5 h-3.5 w-28 rounded-full" />
+        </div>
+        <Bone className="h-4 w-4 shrink-0 rounded-full" />
+      </div>
+      <div className={`${card} flex items-center gap-3 p-3`}>
+        <Bone className="h-12 w-12 shrink-0 rounded-2xl" />
+        <div className="min-w-0 flex-1">
+          <Bone className="h-4 w-32 rounded-full" />
+          <Bone className="mt-1.5 h-3.5 w-40 rounded-full" />
         </div>
         <Bone className="h-4 w-4 shrink-0 rounded-full" />
       </div>
       <div className="grid grid-cols-2 gap-3">
         {Array.from({ length: 2 }, (_, index) => (
-          <div key={index} className={`${card} flex min-h-[7.5rem] flex-col gap-3 p-4`}>
-            <Bone className="h-11 w-11 rounded-2xl" />
-            <div>
-              <Bone className="h-4 w-20 rounded-full" />
-              <Bone className="mt-2 h-3 w-16 rounded-full" />
+          <div key={index} className={`${card} flex items-center gap-3 p-3`}>
+            <Bone className="h-10 w-10 shrink-0 rounded-2xl" />
+            <div className="min-w-0 flex-1">
+              <Bone className="h-3.5 w-16 rounded-full" />
+              <Bone className="mt-1.5 h-3 w-12 rounded-full" />
             </div>
           </div>
         ))}
       </div>
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-2">
         <Bone className="h-4 w-40 rounded-full" />
         <Rows count={2} />
       </section>
@@ -165,6 +173,17 @@ export async function PatientLoading() {
         ))}
       </div>
       <Rows count={3} icon="none" trailing="badge" />
+    </Shell>
+  );
+}
+
+export async function NearbyLoading() {
+  return (
+    <Shell label={await label()}>
+      <BackBone />
+      <TitleBone withHint />
+      <Bone className="h-72 rounded-3xl" />
+      <Rows count={4} trailing="badge" />
     </Shell>
   );
 }

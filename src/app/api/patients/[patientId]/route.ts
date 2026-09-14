@@ -41,12 +41,19 @@ async function updatePatient(
   }
 
   try {
-    const existing = await db.patient.findUnique({ where: { id: patientId }, select: { id: true } });
+    const existing = await db.patient.findUnique({
+      where: { id: patientId },
+      select: { id: true, address: true, city: true },
+    });
     if (!existing) {
       return NextResponse.redirect(appUrl(request, "/patients"), 303);
     }
 
-    await db.patient.update({ where: { id: patientId }, data: input });
+    const placeChanged = existing.address !== input.address || existing.city !== input.city;
+    await db.patient.update({
+      where: { id: patientId },
+      data: placeChanged ? { ...input, latitude: null, longitude: null, geoKey: null } : input,
+    });
     await audit({
       actorId: session.user.id,
       action: "PATIENT_UPDATED",

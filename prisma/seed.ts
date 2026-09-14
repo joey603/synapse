@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { PrismaClient } from "@prisma/client";
 
 import { hashPassword } from "../src/lib/auth/password";
@@ -34,7 +36,7 @@ async function seedPatients() {
       birthDate: date("1988-04-12"),
       sex: "FEMALE" as const,
       city: "Jérusalem",
-      address: "Rue fictive 12",
+      address: "18, rue Emek Refaim",
       contactName: "David Levi",
       contactPhone: "052-000-1101",
       insurer: "Clalit",
@@ -62,7 +64,7 @@ async function seedPatients() {
       birthDate: date("1975-11-03"),
       sex: "MALE" as const,
       city: "Tel Aviv",
-      address: "Rue fictive 4",
+      address: "50, rue Dizengoff",
       contactName: "Ruth Cohen",
       contactPhone: "052-000-1102",
       insurer: "Maccabi",
@@ -90,7 +92,7 @@ async function seedPatients() {
       birthDate: date("1992-06-21"),
       sex: "FEMALE" as const,
       city: "Haïfa",
-      address: "Rue fictive 9",
+      address: "63, rue Herzl",
       contactName: "Yael Biton",
       contactPhone: "052-000-1103",
       insurer: "Meuhedet",
@@ -121,7 +123,7 @@ async function seedPatients() {
       birthDate: date("1968-01-30"),
       sex: "MALE" as const,
       city: "Beer-Sheva",
-      address: "Rue fictive 21",
+      address: "1, boulevard Yitzhak Rager",
       contactName: "Hanna Avraham",
       contactPhone: "052-000-1104",
       insurer: "Leumit",
@@ -148,7 +150,7 @@ async function seedPatients() {
       birthDate: date("1981-09-09"),
       sex: "FEMALE" as const,
       city: "Netanya",
-      address: "Rue fictive 7",
+      address: "12, rue Herzl",
       contactName: "Eli Mizrahi",
       contactPhone: "052-000-1105",
       insurer: "Clalit",
@@ -177,9 +179,16 @@ async function seedPatients() {
       where: { phone: data.phone },
       select: { id: true },
     });
+    const point = TEST_PLACES[data.phone];
+    const placed = {
+      ...data,
+      latitude: point?.latitude ?? null,
+      longitude: point?.longitude ?? null,
+      geoKey: point ? placeKey(data.address, data.city) : null,
+    };
     const patient = existing
-      ? await prisma.patient.update({ where: { id: existing.id }, data })
-      : await prisma.patient.create({ data });
+      ? await prisma.patient.update({ where: { id: existing.id }, data: placed })
+      : await prisma.patient.create({ data: placed });
 
     await prisma.medication.deleteMany({ where: { patientId: patient.id } });
     if (meds.length > 0) {
@@ -190,6 +199,19 @@ async function seedPatients() {
   }
 
   console.info("Cinq patients fictifs prêts.");
+}
+
+const TEST_PLACES: Record<string, { latitude: number; longitude: number }> = {
+  "052-000-1001": { latitude: 31.7652953, longitude: 35.2213341 },
+  "052-000-1002": { latitude: 32.075508, longitude: 34.7755361 },
+  "052-000-1003": { latitude: 32.8078139, longitude: 35.001076 },
+  "052-000-1004": { latitude: 31.2597921, longitude: 34.7982013 },
+  "052-000-1005": { latitude: 32.3294777, longitude: 34.8542621 },
+};
+
+function placeKey(address: string | null, city: string | null) {
+  const query = [address?.trim(), city?.trim(), "Israel"].filter(Boolean).join(", ").slice(0, 240);
+  return createHash("sha256").update(query).digest("hex").slice(0, 24);
 }
 
 function date(value: string) {

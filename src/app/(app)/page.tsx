@@ -52,11 +52,11 @@ export default async function HomePage() {
   ];
 
   return (
-    <div className="-mx-1 flex flex-1 flex-col justify-between gap-6">
+    <div className="-mx-1 flex min-h-0 flex-1 flex-col justify-between gap-2">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-muted">{capitalize(dateLabel)}</p>
-          <h1 className="mt-1 text-[1.75rem] font-semibold leading-tight">
+          <h1 className="mt-0.5 text-2xl font-semibold leading-tight">
             {name ? `${t(locale, "greeting")}, ${firstName(name)}` : t(locale, "greeting")}
           </h1>
         </div>
@@ -68,9 +68,9 @@ export default async function HomePage() {
             ? `/agenda?day=${jerusalemDateKey(nextVisit.occurredAt)}`
             : "/agenda"
         }
-        className="flex items-center gap-4 rounded-3xl bg-card p-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
+        className="flex items-center gap-3 rounded-3xl bg-card p-3 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
       >
-        <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-accent-soft text-terra">
+        <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-2xl bg-accent-soft text-terra">
           <span className="text-sm font-semibold tabular-nums leading-none">
             {nextVisit
               ? new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
@@ -83,7 +83,7 @@ export default async function HomePage() {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold text-muted">{t(locale, "nextVisit")}</span>
-          <span className="mt-0.5 block truncate text-[15px] font-semibold text-ink">
+          <span className="block truncate text-sm font-semibold leading-5 text-ink">
             {nextVisit
               ? `${nextVisit.patient.firstName} ${nextVisit.patient.lastName}`
               : t(locale, "nextVisitEmpty")}
@@ -97,9 +97,23 @@ export default async function HomePage() {
         <ChevronIcon />
       </Link>
 
+      <Link
+        href="/nearby"
+        className="flex items-center gap-3 rounded-3xl bg-card p-3 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
+      >
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-terra">
+          <PinIcon />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-semibold text-ink">{t(locale, "nearbyTitle")}</span>
+          <span className="mt-0.5 block truncate text-sm text-muted">{t(locale, "nearbyHint")}</span>
+        </span>
+        <ChevronIcon />
+      </Link>
+
       <QuickActionGrid items={quickActions} />
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted">{t(locale, "homeNeedTitle")}</h2>
         <SurfaceCard>
           <ActionRow
@@ -114,24 +128,6 @@ export default async function HomePage() {
             title={t(locale, "rowRecent")}
             subtitle={t(locale, "rowRecentHint")}
             icon={<ClockIcon />}
-          />
-          <div className="border-t border-line/70" />
-          <ActionRow
-            href="/transmissions"
-            title={t(locale, "rowPending")}
-            subtitle={
-              toValidate > 0
-                ? `${toValidate} ${t(locale, "reportPending").toLocaleLowerCase()}`
-                : t(locale, "rowPendingHint")
-            }
-            icon={<DocIcon />}
-            trailing={
-              toValidate > 0 ? (
-                <span className="rounded-full bg-danger-soft px-2.5 py-1 text-xs font-semibold text-danger">
-                  {toValidate}
-                </span>
-              ) : undefined
-            }
           />
         </SurfaceCard>
       </section>
@@ -233,19 +229,24 @@ function ClockIcon() {
   );
 }
 
-function ChevronIcon() {
+function PinIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-faint rtl:rotate-180" fill="none" aria-hidden="true">
-      <path d="M9.5 7.5 14 12l-4.5 4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden="true">
+      <path
+        d="M12 21s6-5.2 6-10a6 6 0 1 0-12 0c0 4.8 6 10 6 10Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="11" r="2" fill="currentColor" />
     </svg>
   );
 }
 
-function DocIcon() {
+function ChevronIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-      <path d="M8.5 5.5h5.8L17 8.2V18a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 7 18V7a1.5 1.5 0 0 1 1.5-1.5Z" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M13.5 5.5V8.5H17" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-faint rtl:rotate-180" fill="none" aria-hidden="true">
+      <path d="M9.5 7.5 14 12l-4.5 4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

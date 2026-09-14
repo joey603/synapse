@@ -118,6 +118,9 @@ model Patient {
   phone                 String?
   city                  String?
   address               String?
+  latitude              Float?
+  longitude             Float?
+  geoKey                String?
   contactName           String?
   contactPhone          String?
   insurer               String?
