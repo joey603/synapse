@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+import { BackChevron } from "@/components/ui/BackChevron";
 import { VisitForm } from "@/components/visits/VisitForm";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
-import { db } from "@/lib/db";
+import { db, join } from "@/lib/db";
 import { resolveLocale, type Locale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 import {
@@ -27,25 +28,27 @@ export default async function AgendaPage({
   const todayKey = jerusalemDateKey(now);
   const requestedDay = isJerusalemDayKey(day ?? "") ? day! : null;
 
-  const editing = edit
+  const monthKnown = monthKeyOf(month) ?? (requestedDay ? requestedDay.slice(0, 7) : null);
+  const needsEditFirst = Boolean(edit && !monthKnown);
+  const editingFirst = needsEditFirst
     ? await db.visit.findUnique({
         where: { id: edit },
+        ...join,
         include: { patient: { select: { id: true, firstName: true, lastName: true } } },
       })
     : null;
 
   const monthKey =
-    monthKeyOf(month) ??
-    (requestedDay ? requestedDay.slice(0, 7) : null) ??
-    (editing ? jerusalemDateKey(editing.occurredAt).slice(0, 7) : null) ??
+    monthKnown ??
+    (editingFirst ? jerusalemDateKey(editingFirst.occurredAt).slice(0, 7) : null) ??
     todayKey.slice(0, 7);
   const selectedDay =
     requestedDay && requestedDay.startsWith(monthKey)
       ? requestedDay
-      : editing && jerusalemDateKey(editing.occurredAt).startsWith(monthKey)
-        ? jerusalemDateKey(editing.occurredAt)
+      : editingFirst && jerusalemDateKey(editingFirst.occurredAt).startsWith(monthKey)
+        ? jerusalemDateKey(editingFirst.occurredAt)
         : null;
-  const showSchedule = Boolean(selectedDay && (requestedDay || editing || error));
+  const showSchedule = Boolean(selectedDay && (requestedDay || edit || error));
 
   const days = monthDays(monthKey);
   const rangeStart = jerusalemDayBoundsFor(days[0]!)?.start ?? now;
@@ -53,13 +56,23 @@ export default async function AgendaPage({
   const weekStart = locale === "he" ? 0 : 1;
   const leading = weekdayColumn(days[0]!, weekStart);
 
-  const [patients, visits] = await Promise.all([
-    db.patient.findMany({
-      where: { status: "ACTIVE" },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      select: { id: true, firstName: true, lastName: true, city: true },
-    }),
+  const [editing, patients, visits] = await Promise.all([
+    edit && !editingFirst
+      ? db.visit.findUnique({
+          where: { id: edit },
+          ...join,
+          include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+        })
+      : editingFirst,
+    showSchedule && !edit
+      ? db.patient.findMany({
+          where: { status: "ACTIVE" },
+          orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+          select: { id: true, firstName: true, lastName: true, city: true },
+        })
+      : [],
     db.visit.findMany({
+      ...join,
       where: { occurredAt: { gte: rangeStart, lt: rangeEnd } },
       orderBy: { occurredAt: "asc" },
       include: { patient: { select: { id: true, firstName: true, lastName: true, city: true } } },
@@ -71,8 +84,14 @@ export default async function AgendaPage({
     const key = jerusalemDateKey(visit.occurredAt);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  const dayVisits = selectedDay
-    ? visits.filter((visit) => jerusalemDateKey(visit.occurredAt) === selectedDay)
+  const activeDay =
+    selectedDay ??
+    (editing && jerusalemDateKey(editing.occurredAt).startsWith(monthKey)
+      ? jerusalemDateKey(editing.occurredAt)
+      : null);
+  const openSchedule = Boolean(activeDay && (requestedDay || editing || error));
+  const dayVisits = activeDay
+    ? visits.filter((visit) => jerusalemDateKey(visit.occurredAt) === activeDay)
     : [];
   const headers = weekHeaders(locale, weekStart);
   const prev = shiftMonth(monthKey, -1);
@@ -84,15 +103,7 @@ export default async function AgendaPage({
         href="/"
         className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted"
       >
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
-          <path
-            d="M14.5 7.5 10 12l4.5 4.5"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <BackChevron locale={locale} />
         {t(locale, "home")}
       </Link>
       <header>
@@ -107,9 +118,7 @@ export default async function AgendaPage({
             aria-label={t(locale, "agendaPrev")}
             className="inline-flex h-11 w-11 items-center justify-center rounded-full text-xl font-semibold text-ink"
           >
-            <span className="inline-block rtl:-scale-x-100" aria-hidden="true">
-              {"<"}
-            </span>
+            <span aria-hidden="true">{locale === "he" ? ">" : "<"}</span>
           </Link>
           <p className="text-[15px] font-semibold capitalize text-ink">{monthTitle(monthKey, locale)}</p>
           <Link
@@ -117,9 +126,7 @@ export default async function AgendaPage({
             aria-label={t(locale, "agendaNext")}
             className="inline-flex h-11 w-11 items-center justify-center rounded-full text-xl font-semibold text-ink"
           >
-            <span className="inline-block rtl:-scale-x-100" aria-hidden="true">
-              {">"}
-            </span>
+            <span aria-hidden="true">{locale === "he" ? "<" : ">"}</span>
           </Link>
         </div>
         <div className="grid grid-cols-7 gap-1 text-center">
@@ -132,7 +139,7 @@ export default async function AgendaPage({
             <span key={`pad-${index}`} />
           ))}
           {days.map((key) => {
-            const selected = key === selectedDay && showSchedule;
+            const selected = key === activeDay && openSchedule;
             const count = counts.get(key) ?? 0;
             return (
               <Link
@@ -158,10 +165,10 @@ export default async function AgendaPage({
         </div>
       </SurfaceCard>
 
-      {showSchedule && selectedDay ? (
+      {openSchedule && activeDay ? (
         <section id="schedule" className="flex scroll-mt-4 flex-col gap-4">
           <div>
-            <h2 className="text-sm font-semibold text-muted">{dayHeading(selectedDay, locale, todayKey)}</h2>
+            <h2 className="text-sm font-semibold text-muted">{dayHeading(activeDay, locale, todayKey)}</h2>
             {dayVisits.length === 0 ? (
               <p className="mt-1 text-sm text-muted">{t(locale, "agendaEmpty")}</p>
             ) : (
@@ -188,7 +195,7 @@ export default async function AgendaPage({
                         </span>
                       </Link>
                       <Link
-                        href={`/agenda?month=${monthKey}&day=${selectedDay}&edit=${visit.id}#schedule`}
+                        href={`/agenda?month=${monthKey}&day=${activeDay}&edit=${visit.id}#schedule`}
                         className="shrink-0 text-sm font-semibold text-accent"
                       >
                         {t(locale, "agendaEdit")}
@@ -218,10 +225,10 @@ export default async function AgendaPage({
                   action={editing ? `/api/visits/${editing.id}` : "/api/visits"}
                   patientId={editing?.patientId}
                   patients={editing ? undefined : patients}
-                  returnTo={`/agenda?month=${monthKey}&day=${selectedDay}`}
+                  returnTo={`/agenda?month=${monthKey}&day=${activeDay}`}
                   type={editing?.type}
                   occurredAt={
-                    editing ? formatJerusalemInput(editing.occurredAt) : `${selectedDay}T09:00`
+                    editing ? formatJerusalemInput(editing.occurredAt) : `${activeDay}T09:00`
                   }
                   notes={editing?.notes}
                   error={error === "save" ? "save" : error === "invalid" ? "invalid" : null}

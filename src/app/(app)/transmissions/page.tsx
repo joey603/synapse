@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+import { BackChevron } from "@/components/ui/BackChevron";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
-import { db } from "@/lib/db";
+import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 
@@ -14,7 +15,8 @@ export default async function TransmissionsPage() {
   const reports = await db.clinicalReport.findMany({
     where: { status: { in: ["AI_GENERATED", "REVIEWED"] } },
     orderBy: { visit: { occurredAt: "desc" } },
-    include: { visit: { include: { patient: true } } },
+    ...join,
+    include: { visit: { include: { patient: { select: { firstName: true, lastName: true } } } } },
   });
 
   return (
@@ -23,15 +25,7 @@ export default async function TransmissionsPage() {
         href="/"
         className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted"
       >
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
-          <path
-            d="M14.5 7.5 10 12l4.5 4.5"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <BackChevron locale={locale} />
         {t(locale, "home")}
       </Link>
       <header>

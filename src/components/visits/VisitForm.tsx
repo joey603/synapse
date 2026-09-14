@@ -40,7 +40,7 @@ export function VisitForm({
               name="patientId"
               required
               defaultValue=""
-              className="min-h-12 rounded-2xl border border-line/80 bg-surface px-4 text-base font-normal outline-none focus:ring-2 focus:ring-accent/30"
+              className="min-h-12 rounded-2xl border border-line/80 bg-field px-4 text-base font-normal outline-none focus:ring-2 focus:ring-accent/30"
             >
               <option value="" disabled>
                 {t(locale, "agendaChoose")}
@@ -89,7 +89,7 @@ export function VisitForm({
             name="occurredAt"
             required
             defaultValue={occurredAt}
-            className="min-h-12 rounded-2xl border border-line/80 bg-surface px-4 text-base font-normal outline-none focus:ring-2 focus:ring-accent/30"
+            className="min-h-12 rounded-2xl border border-line/80 bg-field px-4 text-base font-normal outline-none focus:ring-2 focus:ring-accent/30"
           />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
@@ -99,7 +99,7 @@ export function VisitForm({
             rows={4}
             defaultValue={notes ?? ""}
             placeholder={t(locale, "visitNotesHint")}
-            className="resize-y rounded-2xl border border-line/80 bg-surface px-4 py-3 text-base font-normal leading-6 outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
+            className="resize-y rounded-2xl border border-line/80 bg-field px-4 py-3 text-base font-normal leading-6 outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
           />
         </label>
       </SurfaceCard>

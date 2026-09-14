@@ -20,7 +20,7 @@ export function Avatar({
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full bg-accent-soft font-semibold text-accent ${sizes[size]}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-accent-soft font-semibold text-terra ${sizes[size]}`}
       aria-hidden="true"
     >
       {initials || "?"}

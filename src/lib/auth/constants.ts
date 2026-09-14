@@ -1,4 +1,5 @@
 export const SESSION_COOKIE = "synapse_session";
+export const SESSION_USER_COOKIE = "synapse_user";
 
 /** 8 heures, sans renouvellement silencieux. */
 export const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;

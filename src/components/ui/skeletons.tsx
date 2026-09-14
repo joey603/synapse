@@ -18,8 +18,9 @@ function Shell({ label, children, className = "gap-5" }: { label: string; childr
   );
 }
 
-function Bone({ className, tone = "line" }: { className: string; tone?: "line" | "accent" }) {
-  return <div className={`animate-pulse ${tone === "accent" ? "bg-accent/30" : "bg-line"} ${className}`} />;
+function Bone({ className, tone = "line" }: { className: string; tone?: "line" | "accent" | "field" }) {
+  const fill = tone === "accent" ? "bg-accent/30" : tone === "field" ? "bg-field" : "bg-line";
+  return <div className={`animate-pulse ${fill} ${className}`} />;
 }
 
 function BackBone() {
@@ -77,7 +78,7 @@ function FieldBones({ count, tall = false }: { count: number; tall?: boolean }) 
       {Array.from({ length: count }, (_, index) => (
         <div key={index} className="flex flex-col gap-1.5">
           <Bone className="h-3.5 w-24 rounded-full" />
-          <Bone className={tall ? "h-24 rounded-2xl" : "h-12 rounded-2xl"} />
+          <Bone tone="field" className={tall ? "h-24 rounded-2xl" : "h-12 rounded-2xl"} />
         </div>
       ))}
     </>

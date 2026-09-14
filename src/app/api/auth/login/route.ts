@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { appUrl, attachSessionCookie, isSameOrigin, loginWithPassword } from "@/lib/auth/session";
+import { appUrl, attachSessionCookie, attachUserCookie, isSameOrigin, loginWithPassword } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
@@ -20,5 +20,6 @@ export async function POST(request: Request) {
 
   const response = NextResponse.redirect(appUrl(request, "/"), 303);
   attachSessionCookie(response, result.token);
+  attachUserCookie(response, result.user, result.expires);
   return response;
 }

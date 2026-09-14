@@ -3,7 +3,6 @@ import type { Locale } from "@/lib/i18n/locale";
 const messages = {
   fr: {
     appName: "Synapse",
-    tagline: "Documentation infirmière",
     home: "Accueil",
     patients: "Patients",
     language: "Langue",
@@ -22,8 +21,6 @@ const messages = {
     patientsHint: "Les fiches s’afficheront ici, avec la ville et le statut.",
     shellNote: "Aide à la documentation. Données fictives uniquement.",
     loginTitle: "Connexion",
-    loginBody: "Votre dossier du jour, sur le téléphone, entre deux visites.",
-    loginTrust: "Outil d’aide à la documentation. Il ne remplace pas le jugement clinique.",
     email: "Email",
     password: "Mot de passe",
     loginSubmit: "Se connecter",
@@ -208,7 +205,6 @@ const messages = {
   },
   he: {
     appName: "Synapse",
-    tagline: "תיעוד סיעודי",
     home: "ראשי",
     patients: "מטופלים",
     language: "שפה",
@@ -227,8 +223,6 @@ const messages = {
     patientsHint: "התיקים יופיעו כאן, עם העיר והסטטוס.",
     shellNote: "כלי עזר לתיעוד. נתונים בדויים בלבד.",
     loginTitle: "התחברות",
-    loginBody: "התיק של היום, בטלפון, בין ביקור לביקור.",
-    loginTrust: "כלי עזר לתיעוד. אינו מחליף שיקול דעת קליני.",
     email: "דוא״ל",
     password: "סיסמה",
     loginSubmit: "כניסה",

@@ -18,26 +18,21 @@ export default async function LoginPage({
     params.error === "locked" ? "locked" : params.error === "invalid" ? "invalid" : null;
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))]">
-      <header dir="ltr" className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <header dir="ltr" className="flex items-center justify-between rounded-3xl border border-line/80 bg-card px-4 py-2 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
           <Mark />
-          <div>
-            <p className="text-[15px] font-semibold">{t(locale, "appName")}</p>
-            <p className="text-xs text-muted">{t(locale, "tagline")}</p>
-          </div>
-        </div>
-        <LocaleSwitch locale={locale} />
-      </header>
+          <LocaleSwitch locale={locale} />
+        </header>
+      </div>
 
-      <main className="flex flex-1 flex-col justify-center py-10">
-        <div className="rounded-3xl bg-card p-6 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
-          <h1 className="text-[1.75rem] font-semibold leading-tight text-ink">
+      <main className="flex flex-1 flex-col justify-center px-5 py-10">
+        <div className="mx-auto w-full max-w-sm rounded-3xl bg-card p-5 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+          <h1 className="text-2xl font-semibold leading-tight text-ink">
             {t(locale, "loginTitle")}
           </h1>
-          <p className="mt-2 text-[15px] leading-7 text-muted">{t(locale, "loginBody")}</p>
 
-          <PendingForm action="/api/auth/login" className="mt-6 flex flex-col gap-4">
+          <PendingForm action="/api/auth/login" className="mt-5 flex flex-col gap-3">
             {error ? (
               <p
                 className="rounded-2xl bg-danger-soft px-4 py-3 text-sm leading-6 text-danger"
@@ -54,7 +49,7 @@ export default async function LoginPage({
                 type="email"
                 autoComplete="username"
                 required
-                className="min-h-12 rounded-2xl border border-line/80 bg-surface px-4 text-base font-normal text-ink outline-none focus:ring-2 focus:ring-accent/30"
+                className="min-h-12 rounded-2xl border border-line/80 bg-field px-4 text-base font-normal text-ink outline-none focus:ring-2 focus:ring-accent/30"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-medium text-ink">
@@ -64,7 +59,7 @@ export default async function LoginPage({
                 type="password"
                 autoComplete="current-password"
                 required
-                className="min-h-12 rounded-2xl border border-line/80 bg-surface px-4 text-base font-normal text-ink outline-none focus:ring-2 focus:ring-accent/30"
+                className="min-h-12 rounded-2xl border border-line/80 bg-field px-4 text-base font-normal text-ink outline-none focus:ring-2 focus:ring-accent/30"
               />
             </label>
             <PendingButton
@@ -76,7 +71,6 @@ export default async function LoginPage({
         </div>
       </main>
 
-      <p className="text-center text-xs leading-5 text-faint">{t(locale, "loginTrust")}</p>
     </div>
   );
 }

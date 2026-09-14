@@ -7,13 +7,13 @@ export function PatientListRow({
   name,
   meta,
   badge,
-  badgeTone = "accent",
+  badgeTone = "success",
 }: {
   href: string;
   name: string;
   meta: string;
   badge?: string;
-  badgeTone?: "accent" | "danger";
+  badgeTone?: "success" | "danger";
 }) {
   return (
     <Link
@@ -27,14 +27,14 @@ export function PatientListRow({
         {badge ? (
           <span
             className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-              badgeTone === "danger" ? "bg-danger-soft text-danger" : "bg-accent-soft text-accent"
+              badgeTone === "danger" ? "bg-danger-soft text-danger" : "bg-success-soft text-success"
             }`}
           >
             {badge}
           </span>
         ) : null}
       </div>
-      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-faint" fill="none" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-faint rtl:rotate-180" fill="none" aria-hidden="true">
         <path
           d="M9.5 7.5 14 12l-4.5 4.5"
           stroke="currentColor"

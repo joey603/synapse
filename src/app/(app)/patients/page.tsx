@@ -84,7 +84,7 @@ export default async function PatientsPage({
                   name={name}
                   meta={meta || badge}
                   badge={meta ? badge : undefined}
-                  badgeTone={inactive ? "danger" : "accent"}
+                  badgeTone={inactive ? "danger" : "success"}
                 />
               </div>
             );

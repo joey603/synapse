@@ -10,6 +10,9 @@ export const db =
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 
+/** Une seule requête SQL pour les `include`, au lieu d'un aller-retour par relation. */
+export const join = { relationLoadStrategy: "join" as const };
+
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = db;
 }

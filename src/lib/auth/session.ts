@@ -1,12 +1,18 @@
 import "server-only";
 
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { after, NextResponse } from "next/server";
 import { cache } from "react";
 
 import { audit } from "@/lib/audit";
-import { LOCKOUT_AFTER, LOCKOUT_WINDOW_MS, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth/constants";
+import {
+  LOCKOUT_AFTER,
+  LOCKOUT_WINDOW_MS,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_SECONDS,
+  SESSION_USER_COOKIE,
+} from "@/lib/auth/constants";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { db, withDbRetry } from "@/lib/db";
 import { logger } from "@/lib/logger";
@@ -24,8 +30,10 @@ export type SessionLookup =
   | { status: "ok"; user: SessionUser };
 
 type LoginResult =
-  | { ok: true; token: string }
+  | { ok: true; token: string; user: SessionUser; expires: Date }
   | { ok: false; code: "invalid" | "locked" };
+
+const rememberedSessions = new Map<string, { user: SessionUser; until: number }>();
 
 let dummyHash: Promise<string> | null = null;
 
@@ -36,7 +44,15 @@ async function loadSession(): Promise<SessionLookup> {
   if (!token) return { status: "anonymous" };
 
   try {
+    const snapshot = readUserSnapshot(await readCookie(SESSION_USER_COOKIE));
+    if (snapshot) return { status: "ok", user: snapshot };
+
     const sessionToken = hashSessionToken(token);
+    const remembered = rememberedSessions.get(sessionToken);
+    if (remembered && remembered.until > Date.now()) {
+      return { status: "ok", user: remembered.user };
+    }
+
     const row = await withDbRetry(() =>
       db.session.findUnique({
         where: { sessionToken },
@@ -53,10 +69,12 @@ async function loadSession(): Promise<SessionLookup> {
     if (!row) return { status: "invalid" };
 
     if (row.expires.getTime() <= Date.now()) {
+      rememberedSessions.delete(sessionToken);
       await db.session.delete({ where: { id: row.id } }).catch(() => undefined);
       return { status: "invalid" };
     }
 
+    rememberSession(sessionToken, row.user, row.expires.getTime());
     return { status: "ok", user: row.user };
   } catch (error) {
     const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : "unknown";
@@ -77,7 +95,7 @@ export async function loginWithPassword(email: string, password: string): Promis
       lockoutRemainingMs(normalized),
       db.user.findUnique({
         where: { email: normalized },
-        select: { id: true, passwordHash: true },
+        select: { id: true, name: true, email: true, role: true, passwordHash: true },
       }),
     ]);
 
@@ -122,8 +140,14 @@ export async function loginWithPassword(email: string, password: string): Promis
       }).catch(() => logger.error("auth.login_audit_failed")),
     );
     logger.info("auth.login", { result: "success" });
+    rememberSession(hashSessionToken(token), user, expires.getTime());
 
-    return { ok: true, token };
+    return {
+      ok: true,
+      token,
+      expires,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    };
   } catch {
     logger.error("auth.login_failed");
     return { ok: false, code: "invalid" };
@@ -136,6 +160,7 @@ export async function destroyCurrentSession() {
 
   try {
     const sessionToken = hashSessionToken(token);
+    rememberedSessions.delete(sessionToken);
     const row = await db.session.delete({
       where: { sessionToken },
       select: { id: true, userId: true },
@@ -168,9 +193,30 @@ export function attachSessionCookie(response: NextResponse, token: string) {
   });
 }
 
+export function attachUserCookie(response: NextResponse, user: SessionUser, expires: Date) {
+  response.cookies.set({
+    name: SESSION_USER_COOKIE,
+    value: signUserSnapshot(user, expires.getTime()),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
+
 export function clearSessionCookie(response: NextResponse) {
   response.cookies.set({
     name: SESSION_COOKIE,
+    value: "",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+  response.cookies.set({
+    name: SESSION_USER_COOKIE,
     value: "",
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -199,18 +245,75 @@ export function appUrl(request: Request, path: string) {
 }
 
 async function readSessionCookie() {
+  return readCookie(SESSION_COOKIE);
+}
+
+async function readCookie(name: string) {
   const { cookies } = await import("next/headers");
   const store = await cookies();
-  return store.get(SESSION_COOKIE)?.value;
+  return store.get(name)?.value;
+}
+
+function rememberSession(sessionToken: string, user: SessionUser, until: number) {
+  if (rememberedSessions.size > 40) rememberedSessions.clear();
+  rememberedSessions.set(sessionToken, { user, until });
+}
+
+function signUserSnapshot(user: SessionUser, expiresAt: number) {
+  const payload = Buffer.from(JSON.stringify({ ...user, exp: expiresAt })).toString("base64url");
+  return `${payload}.${sign(payload)}`;
+}
+
+function readUserSnapshot(value: string | undefined): SessionUser | null {
+  if (!value) return null;
+  const dot = value.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const payload = value.slice(0, dot);
+  const signature = value.slice(dot + 1);
+  if (!signaturesMatch(signature, sign(payload))) return null;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString()) as {
+      id?: unknown;
+      name?: unknown;
+      email?: unknown;
+      role?: unknown;
+      exp?: unknown;
+    };
+    if (
+      typeof parsed.id !== "string" ||
+      typeof parsed.name !== "string" ||
+      typeof parsed.email !== "string" ||
+      (parsed.role !== "NURSE" && parsed.role !== "ADMIN") ||
+      typeof parsed.exp !== "number" ||
+      parsed.exp <= Date.now()
+    ) {
+      return null;
+    }
+    return { id: parsed.id, name: parsed.name, email: parsed.email, role: parsed.role };
+  } catch {
+    return null;
+  }
+}
+
+function sign(value: string) {
+  return createHmac("sha256", authSecret()).update(value).digest("base64url");
+}
+
+function signaturesMatch(left: string, right: string) {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function authSecret() {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret || secret.length < 32) throw new Error("AUTH_SECRET manquant");
+  return secret;
 }
 
 function hashSessionToken(token: string) {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret || secret.length < 32) {
-    throw new Error("AUTH_SECRET manquant");
-  }
-
-  return createHmac("sha256", secret).update(token).digest("hex");
+  return createHmac("sha256", authSecret()).update(token).digest("hex");
 }
 
 function normalizeEmail(email: string) {

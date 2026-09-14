@@ -4,7 +4,7 @@ import { t } from "@/lib/i18n/messages";
 
 export function LocaleSwitch({ locale }: { locale: Locale }) {
   return (
-    <div dir="ltr" className="flex items-center rounded-full border border-line bg-card p-0.5">
+    <div dir="ltr" className="flex items-center rounded-full bg-accent-soft p-0.5">
       <span className="sr-only">{t(locale, "language")}</span>
       {(["fr", "he"] as const).map((code) => {
         const active = locale === code;
@@ -13,7 +13,7 @@ export function LocaleSwitch({ locale }: { locale: Locale }) {
             <input type="hidden" name="locale" value={code} />
             <button
               type="submit"
-              className={`min-h-10 min-w-10 rounded-full px-2.5 text-[13px] font-semibold transition-colors ${
+              className={`min-h-8 min-w-8 rounded-full px-2 text-xs font-semibold transition-colors ${
                 active ? "bg-ink text-white" : "text-muted"
               }`}
               aria-pressed={active}

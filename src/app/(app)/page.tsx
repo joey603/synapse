@@ -7,6 +7,7 @@ import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { getSession } from "@/lib/auth/session";
 import { db, withDbRetry } from "@/lib/db";
+import type { VisitType } from "@prisma/client";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 import { jerusalemDateKey, jerusalemDayBounds, shiftJerusalemDay } from "@/lib/visits/time";
@@ -19,17 +20,10 @@ export default async function HomePage() {
   const { start, end } = jerusalemDayBounds();
 
   const now = new Date();
-  const [visitsToday, toValidate, nextVisit] = await withDbRetry(() => Promise.all([
-    db.visit.count({ where: { occurredAt: { gte: start, lt: end } } }),
-    db.clinicalReport.count({
-      where: { status: { in: ["AI_GENERATED", "REVIEWED"] } },
-    }),
-    db.visit.findFirst({
-      where: { occurredAt: { gte: now } },
-      orderBy: { occurredAt: "asc" },
-      include: { patient: true },
-    }),
-  ]));
+  const snapshot = await withDbRetry(() => loadHome(start, end, now));
+  const visitsToday = snapshot.visitsToday;
+  const toValidate = snapshot.toValidate;
+  const nextVisit = snapshot.nextVisit;
 
   const dateLabel = new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
     timeZone: "Asia/Jerusalem",
@@ -73,7 +67,7 @@ export default async function HomePage() {
         }
         className="flex items-center gap-4 rounded-3xl bg-card p-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
       >
-        <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-accent-soft text-accent">
+        <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-accent-soft text-terra">
           <span className="text-sm font-semibold tabular-nums leading-none">
             {nextVisit
               ? new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
@@ -134,6 +128,52 @@ export default async function HomePage() {
 
     </div>
   );
+}
+
+async function loadHome(start: Date, end: Date, now: Date) {
+  const rows = await db.$queryRaw<
+    {
+      visits_today: number;
+      to_validate: number;
+      visit_id: string | null;
+      occurred_at: Date | null;
+      visit_type: VisitType | null;
+      first_name: string | null;
+      last_name: string | null;
+    }[]
+  >`
+    SELECT
+      (SELECT COUNT(*)::int FROM "Visit" WHERE "occurredAt" >= ${start} AND "occurredAt" < ${end}) AS visits_today,
+      (SELECT COUNT(*)::int FROM "ClinicalReport" WHERE status IN ('AI_GENERATED', 'REVIEWED')) AS to_validate,
+      v.id AS visit_id,
+      v."occurredAt" AS occurred_at,
+      v.type AS visit_type,
+      p."firstName" AS first_name,
+      p."lastName" AS last_name
+    FROM (SELECT 1) AS stub
+    LEFT JOIN LATERAL (
+      SELECT id, "occurredAt", type, "patientId"
+      FROM "Visit"
+      WHERE "occurredAt" >= ${now}
+      ORDER BY "occurredAt" ASC
+      LIMIT 1
+    ) v ON true
+    LEFT JOIN "Patient" p ON p.id = v."patientId"
+  `;
+  const row = rows[0];
+  return {
+    visitsToday: Number(row?.visits_today ?? 0),
+    toValidate: Number(row?.to_validate ?? 0),
+    nextVisit:
+      row?.visit_id && row.occurred_at && row.visit_type && row.first_name && row.last_name
+        ? {
+            id: row.visit_id,
+            occurredAt: row.occurred_at,
+            type: row.visit_type,
+            patient: { firstName: row.first_name, lastName: row.last_name },
+          }
+        : null,
+  };
 }
 
 function nextWhen(date: Date, locale: Parameters<typeof t>[0], now: Date) {

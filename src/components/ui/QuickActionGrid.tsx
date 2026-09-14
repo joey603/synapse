@@ -10,8 +10,8 @@ export type QuickAction = {
 };
 
 const toneClasses = {
-  default: "bg-surface text-accent",
-  accent: "bg-accent-soft text-accent",
+  default: "bg-accent-soft text-terra",
+  accent: "bg-accent-soft text-terra",
   danger: "bg-danger-soft text-danger",
 };
 

@@ -12,7 +12,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { parseStored } from "@/lib/clinical/schema";
 import type { ReviewFlagCode } from "@/lib/clinical/types";
-import { db } from "@/lib/db";
+import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
 
@@ -28,6 +28,7 @@ export default async function VisitPage({
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
   const visit = await db.visit.findFirst({
+    ...join,
     where: { id: visitId, patientId: id },
     include: { patient: true, report: true, recording: true, transcript: true, extraction: true },
   });

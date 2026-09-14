@@ -2,17 +2,22 @@
 
 @theme {
   --font-sans: var(--font-heebo), "Arial Hebrew", "Noto Sans Hebrew", Arial, sans-serif;
-  --color-ink: #1b2430;
-  --color-muted: #667085;
-  --color-faint: #98a2b3;
-  --color-surface: #f3f5f8;
+  --color-ink: #1c2833;
+  --color-muted: #6b6258;
+  --color-faint: #a3988c;
+  --color-surface: #f7f4ef;
   --color-card: #ffffff;
-  --color-line: #e8ecf1;
-  --color-accent: #0e6b63;
-  --color-accent-strong: #0a534d;
-  --color-accent-soft: #e7f3f1;
+  --color-line: #e6dfd4;
+  --color-accent: #1e4d6b;
+  --color-accent-strong: #163a52;
+  --color-accent-soft: #e7eef3;
+  --color-field: #f8f7f5;
   --color-danger: #8d3b3b;
   --color-danger-soft: #f8eeee;
+  --color-success: #1f7a46;
+  --color-success-soft: #e6f4ec;
+  --color-terra: #9a4f3c;
+  --color-terra-soft: #f6ebe6;
 }
 
 html {

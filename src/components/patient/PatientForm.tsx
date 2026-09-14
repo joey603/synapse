@@ -181,4 +181,4 @@ function Select({
 }
 
 const controlClass =
-  "min-h-12 w-full rounded-2xl border border-line/80 bg-surface px-4 text-base font-normal text-ink outline-none focus:ring-2 focus:ring-accent/30";
+  "min-h-12 w-full rounded-2xl border border-line/80 bg-field px-4 text-base font-normal text-ink outline-none focus:ring-2 focus:ring-accent/30";

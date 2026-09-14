@@ -4,9 +4,10 @@ import { Suspense } from "react";
 
 import { PatientDetailTabs } from "@/components/patient/PatientDetailTabs";
 import { Avatar } from "@/components/ui/Avatar";
+import { BackChevron } from "@/components/ui/BackChevron";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
-import { db } from "@/lib/db";
+import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 import { visitTypeLabel } from "@/lib/clinical/templates";
@@ -25,6 +26,7 @@ export default async function PatientDetailPage({
   const locale = resolveLocale(store.get("synapse_locale")?.value);
 
   const patient = await db.patient.findUnique({
+    ...join,
     where: { id },
     include: {
       visits: { orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }], take: 40, include: { report: true } },
@@ -49,15 +51,7 @@ export default async function PatientDetailPage({
         href="/patients"
         className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted"
       >
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
-          <path
-            d="M14.5 7.5 10 12l4.5 4.5"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <BackChevron locale={locale} />
         {t(locale, "backToPatients")}
       </Link>
 
@@ -69,7 +63,7 @@ export default async function PatientDetailPage({
             {meta ? <p className="mt-1 text-sm text-muted">{meta}</p> : null}
             <span
               className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                patient.status === "ACTIVE" ? "bg-accent-soft text-accent" : "bg-danger-soft text-danger"
+                patient.status === "ACTIVE" ? "bg-success-soft text-success" : "bg-danger-soft text-danger"
               }`}
             >
               {statusLabel}

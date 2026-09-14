@@ -75,7 +75,7 @@ export function ReportEditor({
         onBlur={() => {
           if (!validated && text !== initialText) void save(text);
         }}
-        className="min-h-72 w-full rounded-3xl bg-card px-4 py-4 text-base leading-7 text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)] outline-none"
+        className="min-h-72 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)] outline-none"
       />
       {note ? <p className="text-sm text-muted">{note}</p> : null}
       <div className="flex flex-col gap-2">
