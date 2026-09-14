@@ -13,7 +13,7 @@ import { BackChevron } from "@/components/ui/BackChevron";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { compareMedications } from "@/lib/clinical/medication-compare";
-import { reviewItems, visitDeltas, type ReviewItemCode } from "@/lib/clinical/review-view";
+import { comparisonRows, reviewItems, type ReviewItemCode } from "@/lib/clinical/review-view";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { parseStored } from "@/lib/clinical/schema";
 import type { ClinicalFact, FactDomain } from "@/lib/clinical/types";
@@ -21,6 +21,7 @@ import { CLINICAL_DOMAINS, EXAM_DOMAINS, RISK_DOMAINS } from "@/lib/clinical/typ
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
+import { workflowStatus } from "@/lib/visits/workflow-status";
 
 export default async function VisitPage({
   params,
@@ -55,13 +56,27 @@ export default async function VisitPage({
   const previousExtraction = parseStored(previous?.payload);
   const busy = ["TRANSCRIBING", "EXTRACTING", "GENERATING"].includes(visit.pipelineStatus);
   const validated = visit.report?.status === "VALIDATED";
-  const status = visit.report?.status ?? "DRAFT";
-  const statusLabel =
-    status === "AI_GENERATED" || status === "REVIEWED"
-      ? t(locale, "reportPending")
-      : status === "VALIDATED"
-        ? t(locale, "reportValidated")
-        : t(locale, "visitDraft");
+  const flow = workflowStatus({
+    recordingStored: visit.recording?.status === "STORED",
+    hasTranscript: Boolean(visit.transcript),
+    hasExtraction: Boolean(visit.extraction),
+    reportStatus: visit.report?.status,
+    pipelineStatus: visit.pipelineStatus,
+  });
+  const statusLabel = t(
+    locale,
+    flow === "VALIDATED"
+      ? "workflowValidated"
+      : flow === "TRANSMISSION_GENERATED"
+        ? "workflowReport"
+        : flow === "ANALYZED"
+          ? "workflowAnalyzed"
+          : flow === "TRANSCRIBED"
+            ? "workflowTranscribed"
+            : flow === "AUDIO_READY"
+              ? "workflowAudio"
+              : "workflowDraft",
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -185,6 +200,7 @@ export default async function VisitPage({
               <TranscriptEditor
                 visitId={visit.id}
                 initialText={visit.transcript.rawText}
+                originalText={visit.transcript.providerText}
                 locked={validated}
                 edited={Boolean(visit.transcript.editedAt)}
                 highlight={src}
@@ -192,16 +208,35 @@ export default async function VisitPage({
                   raw: t(locale, "transcriptRaw"),
                   edited: t(locale, "transcriptEdited"),
                   note: t(locale, "transcriptNote"),
-                  save: t(locale, "transcriptSave"),
+                  saving: t(locale, "transcriptSaving"),
                   saved: t(locale, "transcriptSaved"),
                   lost: t(locale, "saveLost"),
                   source: t(locale, "seeSource"),
+                  original: t(locale, "originalTranscript"),
+                  corrected: t(locale, "correctedTranscript"),
                 }}
               />
             </SurfaceCard>
           )}
         </>
       ) : null}
+      <details className="rounded-2xl bg-card ring-1 ring-line">
+        <summary className="min-h-12 cursor-pointer px-4 py-3 text-sm font-semibold text-muted">{t(locale, "addTask")}</summary>
+        <form action={`/api/patients/${id}/tasks`} method="post" className="flex flex-col gap-2 px-4 pb-4">
+          <input type="hidden" name="visitId" value={visit.id} />
+          <input type="hidden" name="next" value={`/patients/${id}/visits/${visit.id}`} />
+          <input name="title" required maxLength={160} placeholder={t(locale, "eventTitle")} className="min-h-12 rounded-xl bg-field px-3 text-sm" />
+          <div className="grid grid-cols-2 gap-2">
+            <select name="priority" className="min-h-12 rounded-xl bg-field px-2 text-sm">
+              <option value="NORMAL">{t(locale, "priorityNormal")}</option>
+              <option value="IMPORTANT">{t(locale, "priorityImportant")}</option>
+              <option value="URGENT">{t(locale, "priorityUrgent")}</option>
+            </select>
+            <input name="dueDate" type="date" className="min-h-12 rounded-xl bg-field px-2 text-sm" />
+          </div>
+          <button className="min-h-12 rounded-xl border border-line text-sm font-semibold text-ink">{t(locale, "addTask")}</button>
+        </form>
+      </details>
     </div>
   );
 }
@@ -441,12 +476,14 @@ function AnalysisPanel({
         before: t(locale, "changeBefore"),
         today: t(locale, "changeToday"),
         empty: t(locale, "sectionEmpty"),
-        rows: visitDeltas(extraction, previous).map((delta) => ({
+        notComparable: t(locale, "notComparable"),
+        rows: comparisonRows(extraction, previous).map((delta) => ({
           id: delta.domain,
           label: t(locale, domainLabel(delta.domain)),
           from: t(locale, assertionKey(delta.from)),
           to: t(locale, assertionKey(delta.to)),
-          historical: delta.historical,
+          historical: false,
+          incomparable: delta.incomparable,
         })),
       }}
     />

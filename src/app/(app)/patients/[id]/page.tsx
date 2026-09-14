@@ -2,15 +2,21 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 
+import { PathwaySummary } from "@/components/patient/PathwaySummary";
+import { PatientCockpit } from "@/components/patient/PatientCockpit";
 import { PatientDetailTabs } from "@/components/patient/PatientDetailTabs";
+import { PatientTimeline } from "@/components/patient/PatientTimeline";
 import { Avatar } from "@/components/ui/Avatar";
 import { BackChevron } from "@/components/ui/BackChevron";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
+import { jerusalemDay } from "@/lib/clinical/cockpit";
+import { parseStored } from "@/lib/clinical/schema";
+import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
-import { visitTypeLabel } from "@/lib/clinical/templates";
+import { workflowStatus } from "@/lib/visits/workflow-status";
 import { notFound } from "next/navigation";
 
 export default async function PatientDetailPage({
@@ -18,10 +24,10 @@ export default async function PatientDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; filter?: string; page?: string }>;
 }) {
   const { id } = await params;
-  const { tab = "timeline" } = await searchParams;
+  const { tab = "timeline", filter = "all", page = "1" } = await searchParams;
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
 
@@ -29,8 +35,14 @@ export default async function PatientDetailPage({
     ...join,
     where: { id },
     include: {
-      visits: { orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }], take: 40, include: { report: true } },
+      visits: {
+        orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+        take: 100,
+        include: { report: true, recording: true, transcript: { select: { id: true } }, extraction: { select: { id: true } } },
+      },
       medications: { where: { active: true }, orderBy: { name: "asc" } },
+      events: { orderBy: { occurredAt: "desc" }, take: 100 },
+      tasks: { orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }], take: 100 },
     },
   });
 
@@ -41,8 +53,41 @@ export default async function PatientDetailPage({
   const meta = [patient.city, age !== null ? `${age} ${t(locale, "ageYears")}` : null]
     .filter(Boolean)
     .join(" • ");
-  const statusLabel =
-    patient.status === "ACTIVE" ? t(locale, "patientActive") : t(locale, "patientInactive");
+  const statusLabel = statusText(locale, patient.status);
+  const now = new Date();
+  const timed = patient.visits.map((visit) => ({
+    ...visit,
+    workflow: workflowStatus({
+      recordingStored: visit.recording?.status === "STORED",
+      hasTranscript: Boolean(visit.transcript),
+      hasExtraction: Boolean(visit.extraction),
+      reportStatus: visit.report?.status,
+      pipelineStatus: visit.pipelineStatus,
+    }),
+  }));
+  const lastVisit = timed.find((visit) => visit.occurredAt.getTime() <= now.getTime()) ?? null;
+  const nextVisit = [...timed].reverse().find((visit) => visit.occurredAt.getTime() > now.getTime()) ?? null;
+  const unfinished = timed.find((visit) => visit.occurredAt.getTime() <= now.getTime() && visit.workflow !== "VALIDATED") ?? null;
+  const latest = await db.clinicalExtraction.findFirst({
+    where: { visit: { patientId: id, report: { status: "VALIDATED" } } },
+    orderBy: { visit: { occurredAt: "desc" } },
+    select: { payload: true },
+  });
+  const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const windowStart = patient.admittedAt && patient.admittedAt < since ? patient.admittedAt : since;
+  const pathwayFacts = await db.clinicalExtraction.findMany({
+    where: { visit: { patientId: id, occurredAt: { gte: windowStart }, report: { status: "VALIDATED" } } },
+    orderBy: { visit: { occurredAt: "desc" } },
+    take: 12,
+    select: { payload: true, visit: { select: { occurredAt: true } } },
+  });
+  const treatmentEvent = patient.events.find((event) => event.kind === "TREATMENT") ?? null;
+  const treatmentMed = [...patient.medications].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+  const treatment = treatmentEvent
+    ? { title: treatmentEvent.title, when: formatDay(treatmentEvent.occurredAt, locale) }
+    : treatmentMed
+      ? { title: t(locale, "treatmentKnown"), when: formatDay(treatmentMed.updatedAt, locale) }
+      : null;
   const identity = identityRows(locale, patient);
 
   return (
@@ -61,11 +106,7 @@ export default async function PatientDetailPage({
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold leading-tight text-ink">{fullName}</h1>
             {meta ? <p className="mt-1 text-sm text-muted">{meta}</p> : null}
-            <span
-              className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                patient.status === "ACTIVE" ? "bg-success-soft text-success" : "bg-danger-soft text-danger"
-              }`}
-            >
+            <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(patient.status)}`}>
               {statusLabel}
             </span>
           </div>
@@ -78,12 +119,26 @@ export default async function PatientDetailPage({
         </div>
       </SurfaceCard>
 
-      <Link
-        href={`/patients/${patient.id}/visits/new`}
-        className="flex min-h-12 items-center justify-center rounded-2xl bg-accent text-base font-semibold text-white"
-      >
-        {t(locale, "newVisit")}
-      </Link>
+      <PatientCockpit
+        locale={locale}
+        patientId={patient.id}
+        today={jerusalemDay(now)}
+        lastVisit={lastVisit ? { id: lastVisit.id, occurredAt: lastVisit.occurredAt, typeLabel: t(locale, visitTypeLabel(lastVisit.type)), workflow: lastVisit.workflow } : null}
+        nextVisit={nextVisit ? { id: nextVisit.id, occurredAt: nextVisit.occurredAt, typeLabel: t(locale, visitTypeLabel(nextVisit.type)), workflow: nextVisit.workflow } : null}
+        unfinished={unfinished ? { id: unfinished.id, occurredAt: unfinished.occurredAt, typeLabel: t(locale, visitTypeLabel(unfinished.type)), workflow: unfinished.workflow } : null}
+        tasks={patient.tasks}
+        extraction={parseStored(latest?.payload)}
+        treatment={treatment}
+      />
+
+      <PathwaySummary
+        locale={locale}
+        admittedAt={patient.admittedAt}
+        now={now}
+        visits={timed}
+        events={patient.events}
+        facts={pathwayFacts.map((fact) => ({ at: fact.visit.occurredAt, payload: fact.payload }))}
+      />
 
       <SurfaceCard className="p-5">
         <h2 className="text-sm font-semibold text-muted">{t(locale, "profileSummary")}</h2>
@@ -134,84 +189,39 @@ export default async function PatientDetailPage({
       ) : null}
 
       {tab === "timeline" ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-muted">{t(locale, "patientHistory")}</h2>
-          {patient.visits.length === 0 ? (
-            <EmptyState title={t(locale, "timelineEmpty")} body={t(locale, "timelineHint")} />
-          ) : (
-            <SurfaceCard>
-              {patient.visits.map((visit, index) => {
-                const date = new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
-                  timeZone: "Asia/Jerusalem",
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }).format(visit.occurredAt);
-
-                return (
-                  <div key={visit.id}>
-                    {index > 0 ? <div className="border-t border-line/70" /> : null}
-                    <Link
-                      href={`/patients/${patient.id}/visits/${visit.id}`}
-                      className="flex min-h-[4.5rem] items-center justify-between gap-3 px-4 py-3 active:bg-surface/70"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-[15px] font-semibold text-ink">{date}</span>
-                        <span className="block text-sm text-muted">{t(locale, visitTypeLabel(visit.type))}</span>
-                      </span>
-                      <ReportBadge
-                        locale={locale}
-                        status={visit.report?.status}
-                        planned={visit.occurredAt.getTime() > Date.now() && visit.report?.status === "DRAFT"}
-                      />
-                    </Link>
-                  </div>
-                );
-              })}
-            </SurfaceCard>
-          )}
-        </section>
+        <PatientTimeline
+          locale={locale}
+          patientId={patient.id}
+          visits={timed}
+          events={patient.events}
+          tasks={patient.tasks}
+          filter={["visits", "treatment", "events", "tasks"].includes(filter) ? filter : "all"}
+          page={Math.min(Math.max(Number(page) || 1, 1), 5)}
+        />
       ) : null}
     </div>
   );
 }
 
-function ReportBadge({
-  locale,
-  status,
-  planned = false,
-}: {
-  locale: ReturnType<typeof resolveLocale>;
-  status: "DRAFT" | "AI_GENERATED" | "REVIEWED" | "VALIDATED" | undefined;
-  planned?: boolean;
-}) {
-  if (planned) {
-    return (
-      <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
-        {t(locale, "agendaPlanned")}
-      </span>
-    );
-  }
-  if (status === "AI_GENERATED" || status === "REVIEWED") {
-    return (
-      <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
-        {t(locale, "reportPending")}
-      </span>
-    );
-  }
-  if (status === "VALIDATED") {
-    return (
-      <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
-        {t(locale, "reportValidated")}
-      </span>
-    );
-  }
-  return (
-    <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-muted">
-      {t(locale, "visitDraft")}
-    </span>
-  );
+function statusText(locale: ReturnType<typeof resolveLocale>, status: "ACTIVE" | "INACTIVE" | "DISCHARGED") {
+  if (status === "DISCHARGED") return t(locale, "patientDischarged");
+  if (status === "INACTIVE") return t(locale, "patientInactive");
+  return t(locale, "patientActive");
+}
+
+function statusTone(status: "ACTIVE" | "INACTIVE" | "DISCHARGED") {
+  if (status === "ACTIVE") return "bg-success-soft text-success";
+  if (status === "DISCHARGED") return "bg-surface text-muted";
+  return "bg-danger-soft text-danger";
+}
+
+function formatDay(date: Date, locale: ReturnType<typeof resolveLocale>) {
+  return new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
+    timeZone: "Asia/Jerusalem",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 function ageInYears(birthDate: Date, now = new Date()) {

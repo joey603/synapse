@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { ActionRow } from "@/components/ui/ActionRow";
 import { QuickActionGrid } from "@/components/ui/QuickActionGrid";
+import { SearchField } from "@/components/ui/SearchField";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { getSession } from "@/lib/auth/session";
@@ -20,7 +21,10 @@ export default async function HomePage() {
   const { start, end } = jerusalemDayBounds();
 
   const now = new Date();
-  const snapshot = await withDbRetry(() => loadHome(start, end, now));
+  const [snapshot, openTasks] = await Promise.all([
+    withDbRetry(() => loadHome(start, end, now)),
+    db.task.count({ where: { status: { not: "DONE" } } }),
+  ]);
   const visitsToday = snapshot.visitsToday;
   const toValidate = snapshot.toValidate;
   const nextVisit = snapshot.nextVisit;
@@ -58,6 +62,8 @@ export default async function HomePage() {
           </h1>
         </div>
       </header>
+
+      <SearchField locale={locale} action="/search" />
 
       <Link
         href={
@@ -99,6 +105,13 @@ export default async function HomePage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-muted">{t(locale, "homeNeedTitle")}</h2>
         <SurfaceCard>
+          <ActionRow
+            href="/tasks"
+            title={t(locale, "tasksTitle")}
+            subtitle={openTasks > 0 ? `${openTasks} ${t(locale, "homeTasksHint").toLocaleLowerCase()}` : t(locale, "tasksEmpty")}
+            icon={<CheckIcon />}
+          />
+          <div className="border-t border-line/70" />
           <ActionRow
             href="/visits"
             title={t(locale, "rowRecent")}

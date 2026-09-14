@@ -13,7 +13,7 @@ export function PatientListRow({
   name: string;
   meta: string;
   badge?: string;
-  badgeTone?: "success" | "danger";
+  badgeTone?: "success" | "danger" | "muted";
 }) {
   return (
     <Link
@@ -27,7 +27,11 @@ export function PatientListRow({
         {badge ? (
           <span
             className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-              badgeTone === "danger" ? "bg-danger-soft text-danger" : "bg-success-soft text-success"
+              badgeTone === "danger"
+                ? "bg-danger-soft text-danger"
+                : badgeTone === "muted"
+                  ? "bg-surface text-muted"
+                  : "bg-success-soft text-success"
             }`}
           >
             {badge}

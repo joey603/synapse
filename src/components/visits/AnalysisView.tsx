@@ -47,7 +47,8 @@ export function AnalysisView({
     before: string;
     today: string;
     empty: string;
-    rows: Array<{ id: string; label: string; from: string; to: string; historical: boolean }>;
+    notComparable: string;
+    rows: Array<{ id: string; label: string; from: string; to: string; historical: boolean; incomparable?: boolean }>;
   } | null;
 }) {
   return (
@@ -133,12 +134,18 @@ export function AnalysisView({
             {changes.rows.map((row) => (
               <div key={row.id} className="border-t border-line/70 px-4 py-3 first:border-t-0">
                 <p className="text-sm font-semibold text-ink">{row.label}</p>
-                <p className="mt-1 text-sm text-muted">
-                  {changes.before}: {row.from}
-                </p>
-                <p className="text-sm text-ink">
-                  {changes.today}: {row.to}
-                </p>
+                {row.incomparable ? (
+                  <p className="mt-1 text-sm text-muted">{changes.notComparable}</p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-sm text-muted">
+                      {changes.before}: {row.from}
+                    </p>
+                    <p className="text-sm text-ink">
+                      {changes.today}: {row.to}
+                    </p>
+                  </>
+                )}
               </div>
             ))}
           </div>

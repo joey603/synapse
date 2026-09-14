@@ -1,7 +1,7 @@
 import type { PatientStatus, Sex } from "@prisma/client";
 
 const SEXES = ["MALE", "FEMALE", "OTHER", "UNSPECIFIED"] as const satisfies readonly Sex[];
-const STATUSES = ["ACTIVE", "INACTIVE"] as const satisfies readonly PatientStatus[];
+const STATUSES = ["ACTIVE", "INACTIVE", "DISCHARGED"] as const satisfies readonly PatientStatus[];
 
 export type PatientInput = {
   firstName: string;

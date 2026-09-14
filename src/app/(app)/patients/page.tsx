@@ -73,8 +73,12 @@ export default async function PatientsPage({
           {patients.map((patient, index) => {
             const name = `${patient.firstName} ${patient.lastName}`;
             const meta = [patient.city, patient.primaryDiagnosis].filter(Boolean).join(" • ");
-            const inactive = patient.status !== "ACTIVE";
-            const badge = inactive ? t(locale, "patientInactive") : t(locale, "patientActive");
+            const badge =
+              patient.status === "DISCHARGED"
+                ? t(locale, "patientDischarged")
+                : patient.status === "INACTIVE"
+                  ? t(locale, "patientInactive")
+                  : t(locale, "patientActive");
 
             return (
               <div key={patient.id}>
@@ -84,7 +88,7 @@ export default async function PatientsPage({
                   name={name}
                   meta={meta || badge}
                   badge={meta ? badge : undefined}
-                  badgeTone={inactive ? "danger" : "success"}
+                  badgeTone={patient.status === "ACTIVE" ? "success" : patient.status === "DISCHARGED" ? "muted" : "danger"}
                 />
               </div>
             );

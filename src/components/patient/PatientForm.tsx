@@ -62,6 +62,7 @@ export function PatientForm({
           options={[
             ["ACTIVE", "patientActive"],
             ["INACTIVE", "patientInactive"],
+            ["DISCHARGED", "patientDischarged"],
           ]}
         />
       </SurfaceCard>

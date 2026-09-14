@@ -17,6 +17,28 @@ enum UserRole {
 enum PatientStatus {
   ACTIVE
   INACTIVE
+  DISCHARGED
+}
+
+enum TaskStatus {
+  TODO
+  WAITING
+  DONE
+}
+
+enum TaskPriority {
+  NORMAL
+  IMPORTANT
+  URGENT
+}
+
+enum ClinicalEventKind {
+  TREATMENT
+  CLINICAL
+  HOSPITALIZATION
+  EXAM
+  CONTACT
+  OTHER
 }
 
 enum Sex {
@@ -121,6 +143,8 @@ model Patient {
 
   visits                Visit[]
   medications           Medication[]
+  tasks                 Task[]
+  events                ClinicalEvent[]
   auditLogs             AuditLog[]
 
   @@index([status])
@@ -145,6 +169,8 @@ model Visit {
   transcript     Transcript?
   extraction     ClinicalExtraction?
   report         ClinicalReport?
+  tasks          Task[]
+  events         ClinicalEvent[]
   auditLogs      AuditLog[]
 
   @@index([patientId, occurredAt])
@@ -236,6 +262,40 @@ model Medication {
   patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Restrict)
 
   @@index([patientId, active])
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  patientId   String
+  visitId     String?
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(NORMAL)
+  dueDate     DateTime?    @db.Date
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  visit       Visit?       @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, status, dueDate])
+}
+
+model ClinicalEvent {
+  id         String            @id @default(cuid())
+  patientId  String
+  visitId    String?
+  kind       ClinicalEventKind
+  title      String
+  body       String?
+  occurredAt DateTime
+  createdAt  DateTime          @default(now())
+
+  patient    Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  visit      Visit?            @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, occurredAt])
 }
 
 model AuditLog {

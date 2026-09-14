@@ -24,6 +24,13 @@ export type VisitDelta = {
   historical: boolean;
 };
 
+export type ComparisonRow = {
+  domain: FactDomain;
+  from: Assertion;
+  to: Assertion;
+  incomparable: boolean;
+};
+
 const IMPORTANT = new Set<FactDomain>([...RISK_DOMAINS, ...CLINICAL_DOMAINS]);
 
 export function reviewItems(
@@ -95,6 +102,33 @@ export function visitDeltas(current: StoredExtraction, previous: StoredExtractio
   }
 
   return deltas;
+}
+
+export function comparisonRows(current: StoredExtraction, previous: StoredExtraction | null): ComparisonRow[] {
+  if (!previous) return [];
+  const rows: ComparisonRow[] = [];
+
+  for (const domain of IMPORTANT) {
+    const now = current.facts[domain];
+    const before = previous.facts[domain];
+    if (!now || !before) continue;
+    const nowKnown = known(now.assertion);
+    const beforeKnown = known(before.assertion);
+    if (!nowKnown && !beforeKnown) continue;
+    if (nowKnown !== beforeKnown) {
+      rows.push({ domain, from: before.assertion, to: now.assertion, incomparable: true });
+      continue;
+    }
+    if (now.assertion !== before.assertion) {
+      rows.push({ domain, from: before.assertion, to: now.assertion, incomparable: false });
+    }
+  }
+
+  return rows;
+}
+
+function known(assertion: Assertion) {
+  return assertion === "present" || assertion === "explicitly_denied" || assertion === "uncertain";
 }
 
 function namesClose(chartName: string, spoken: string) {
