@@ -22,16 +22,16 @@ export function QuickActionGrid({ items }: { items: QuickAction[] }) {
         <Link
           key={item.href + item.title}
           href={item.href}
-          className="flex items-center gap-3 rounded-3xl bg-card p-3 shadow-[0_8px_24px_rgba(27,36,48,0.06)] transition-transform active:scale-[0.98]"
+          className="flex min-h-[7.5rem] flex-col gap-3 rounded-3xl bg-card p-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)] transition-transform active:scale-[0.98]"
         >
           <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${toneClasses[item.tone ?? "default"]}`}
+            className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClasses[item.tone ?? "default"]}`}
           >
             {item.icon}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold leading-snug text-ink">{item.title}</p>
-            <p className="truncate text-xs text-muted">{item.subtitle}</p>
+          <div>
+            <p className="text-[15px] font-semibold leading-snug text-ink">{item.title}</p>
+            <p className="mt-0.5 text-xs leading-5 text-muted">{item.subtitle}</p>
           </div>
         </Link>
       ))}

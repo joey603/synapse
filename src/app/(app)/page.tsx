@@ -52,11 +52,11 @@ export default async function HomePage() {
   ];
 
   return (
-    <div className="-mx-1 flex min-h-0 flex-1 flex-col justify-between gap-2">
+    <div className="-mx-1 flex flex-1 flex-col justify-between gap-6">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-muted">{capitalize(dateLabel)}</p>
-          <h1 className="mt-0.5 text-2xl font-semibold leading-tight">
+          <h1 className="mt-1 text-[1.75rem] font-semibold leading-tight">
             {name ? `${t(locale, "greeting")}, ${firstName(name)}` : t(locale, "greeting")}
           </h1>
         </div>
@@ -68,9 +68,9 @@ export default async function HomePage() {
             ? `/agenda?day=${jerusalemDateKey(nextVisit.occurredAt)}`
             : "/agenda"
         }
-        className="flex items-center gap-3 rounded-3xl bg-card p-3 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
+        className="flex items-center gap-4 rounded-3xl bg-card p-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
       >
-        <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-2xl bg-accent-soft text-terra">
+        <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-accent-soft text-terra">
           <span className="text-sm font-semibold tabular-nums leading-none">
             {nextVisit
               ? new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
@@ -83,7 +83,7 @@ export default async function HomePage() {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold text-muted">{t(locale, "nextVisit")}</span>
-          <span className="block truncate text-sm font-semibold leading-5 text-ink">
+          <span className="mt-0.5 block truncate text-[15px] font-semibold text-ink">
             {nextVisit
               ? `${nextVisit.patient.firstName} ${nextVisit.patient.lastName}`
               : t(locale, "nextVisitEmpty")}
@@ -99,9 +99,9 @@ export default async function HomePage() {
 
       <Link
         href="/nearby"
-        className="flex items-center gap-3 rounded-3xl bg-card p-3 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
+        className="flex items-center gap-4 rounded-3xl bg-card p-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
       >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-terra">
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-terra">
           <PinIcon />
         </span>
         <span className="min-w-0 flex-1">
@@ -113,7 +113,7 @@ export default async function HomePage() {
 
       <QuickActionGrid items={quickActions} />
 
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-muted">{t(locale, "homeNeedTitle")}</h2>
         <SurfaceCard>
           <ActionRow

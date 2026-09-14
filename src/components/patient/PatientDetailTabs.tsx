@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -11,23 +10,9 @@ export function PatientDetailTabs({ locale, patientId }: { locale: Locale; patie
   const base = `/patients/${patientId}`;
   const params = useSearchParams();
   const tab = params.get("filter") === "tasks" ? "tasks" : (params.get("tab") ?? "timeline");
-  const bar = useRef<HTMLDivElement>(null);
-  const first = useRef(true);
-
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    const pin = () => bar.current?.scrollIntoView({ block: "start", inline: "nearest" });
-    pin();
-    const frame = window.requestAnimationFrame(pin);
-    return () => window.cancelAnimationFrame(frame);
-  }, [tab]);
 
   return (
-    <div ref={bar} className="scroll-mt-3">
-      <SegmentedControl
+    <SegmentedControl
         scroll={false}
         activeId={tab}
         segments={[
@@ -36,7 +21,6 @@ export function PatientDetailTabs({ locale, patientId }: { locale: Locale; patie
           { id: "treatment", label: t(locale, "tabTreatment"), href: `${base}?tab=treatment` },
           { id: "tasks", label: t(locale, "filterTasks"), href: `${base}?tab=tasks` },
         ]}
-      />
-    </div>
+    />
   );
 }
