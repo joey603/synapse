@@ -7,6 +7,7 @@ import { AnalysisView } from "@/components/visits/AnalysisView";
 import { AudioUploader } from "@/components/visits/AudioUploader";
 import { LiveRecorder } from "@/components/visits/LiveRecorder";
 import { PipelineProgress } from "@/components/visits/PipelineProgress";
+import { TaskPanel } from "@/components/tasks/TaskPanel";
 import { ReportEditor } from "@/components/visits/ReportEditor";
 import { TranscriptEditor } from "@/components/visits/TranscriptEditor";
 import { BackChevron } from "@/components/ui/BackChevron";
@@ -46,6 +47,11 @@ export default async function VisitPage({
     },
   });
   if (!visit) notFound();
+  const tasks = await db.task.findMany({
+    where: { patientId: id },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+    take: 100,
+  });
 
   const previous = await db.clinicalExtraction.findFirst({
     where: { visit: { patientId: id, id: { not: visit.id }, report: { status: "VALIDATED" } } },
@@ -136,17 +142,27 @@ export default async function VisitPage({
           ) : null}
         </SurfaceCard>
       ) : null}
-      {visit.transcript ? (
+      <Suspense fallback={null}>
+        <SegmentedControl
+          scroll={false}
+          segments={[
+            { id: "transcript", label: t(locale, "tabTranscript"), href: `/patients/${id}/visits/${visit.id}?tab=transcript` },
+            { id: "analysis", label: t(locale, "tabAnalysis"), href: `/patients/${id}/visits/${visit.id}?tab=analysis` },
+            { id: "report", label: t(locale, "tabReport"), href: `/patients/${id}/visits/${visit.id}?tab=report` },
+            { id: "tasks", label: t(locale, "filterTasks"), href: `/patients/${id}/visits/${visit.id}?tab=tasks` },
+          ]}
+        />
+      </Suspense>
+      {tab === "tasks" ? (
+        <TaskPanel
+          locale={locale}
+          patientId={id}
+          visitId={visit.id}
+          tasks={tasks}
+          next={`/patients/${id}/visits/${visit.id}?tab=tasks`}
+        />
+      ) : visit.transcript ? (
         <>
-          <Suspense fallback={null}>
-            <SegmentedControl
-              segments={[
-                { id: "transcript", label: t(locale, "tabTranscript"), href: `/patients/${id}/visits/${visit.id}?tab=transcript` },
-                { id: "analysis", label: t(locale, "tabAnalysis"), href: `/patients/${id}/visits/${visit.id}?tab=analysis` },
-                { id: "report", label: t(locale, "tabReport"), href: `/patients/${id}/visits/${visit.id}?tab=report` },
-              ]}
-            />
-          </Suspense>
           {tab === "analysis" ? (
             extraction ? (
               <>
@@ -223,23 +239,6 @@ export default async function VisitPage({
           )}
         </>
       ) : null}
-      <details className="rounded-2xl bg-terra-soft">
-        <summary className="min-h-12 cursor-pointer px-4 py-3 text-sm font-semibold text-terra">{t(locale, "addTask")}</summary>
-        <form action={`/api/patients/${id}/tasks`} method="post" className="flex flex-col gap-2 px-4 pb-4">
-          <input type="hidden" name="visitId" value={visit.id} />
-          <input type="hidden" name="next" value={`/patients/${id}/visits/${visit.id}`} />
-          <input name="title" required maxLength={160} placeholder={t(locale, "eventTitle")} className="min-h-12 rounded-xl bg-field px-3 text-sm" />
-          <div className="grid grid-cols-2 gap-2">
-            <select name="priority" className="min-h-12 rounded-xl bg-field px-2 text-sm">
-              <option value="NORMAL">{t(locale, "priorityNormal")}</option>
-              <option value="IMPORTANT">{t(locale, "priorityImportant")}</option>
-              <option value="URGENT">{t(locale, "priorityUrgent")}</option>
-            </select>
-            <input name="dueDate" type="date" className="min-h-12 rounded-xl bg-field px-2 text-sm" />
-          </div>
-          <button className="min-h-12 rounded-xl bg-terra text-sm font-semibold text-white">{t(locale, "addTask")}</button>
-        </form>
-      </details>
     </div>
   );
 }
@@ -596,7 +595,7 @@ function AnalysisExtras({
                 <p className="text-sm leading-6 text-ink">{task}</p>
                 <form action={`/api/patients/${patientId}/tasks`} method="post">
                   <input type="hidden" name="visitId" value={visitId} />
-                  <input type="hidden" name="next" value={`/patients/${patientId}/visits/${visitId}?tab=analysis`} />
+                  <input type="hidden" name="next" value={`/patients/${patientId}/visits/${visitId}?tab=tasks`} />
                   <input type="hidden" name="title" value={task} />
                   <input type="hidden" name="priority" value="NORMAL" />
                   <button className="min-h-10 rounded-xl bg-terra px-3 text-sm font-semibold text-white">

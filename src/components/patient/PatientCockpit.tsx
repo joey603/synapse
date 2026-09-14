@@ -3,7 +3,7 @@ import Link from "next/link";
 import { pickNextAction } from "@/lib/clinical/cockpit";
 import type { Locale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
-import type { WorkflowLabel } from "@/lib/visits/workflow-status";
+import { visitHrefForStatus, type WorkflowLabel } from "@/lib/visits/workflow-status";
 
 type VisitRow = {
   id: string;
@@ -38,6 +38,7 @@ export function PatientCockpit({
     unfinished: unfinished && unfinished.workflow !== "VALIDATED" ? { id: unfinished.id, status: unfinished.workflow } : null,
     nextVisitId: nextVisit?.id ?? null,
   });
+  const openVisit = unfinished && unfinished.workflow !== "VALIDATED" ? unfinished : null;
   const actionLabel =
     action.kind === "task"
       ? action.title
@@ -46,15 +47,36 @@ export function PatientCockpit({
         : action.kind === "scheduled" && nextVisit
           ? `${nextVisit.typeLabel} · ${formatWhen(nextVisit.occurredAt, locale)}`
           : t(locale, "newVisit");
+  const sameVisit = action.kind === "visit" && openVisit != null;
 
   return (
     <section className="flex flex-col gap-3">
-      <Link
-        href={`/patients/${patientId}/visits/new`}
-        className="flex min-h-12 items-center justify-center rounded-2xl bg-accent px-4 text-base font-semibold text-white"
-      >
-        {t(locale, "newVisit")}
-      </Link>
+      {openVisit ? (
+        <div className="flex flex-col gap-2">
+          <Link
+            href={visitHrefForStatus(patientId, openVisit.id, openVisit.workflow)}
+            className="flex min-h-12 flex-col items-center justify-center rounded-2xl bg-accent px-4 py-2 text-center text-white"
+          >
+            <span className="text-base font-semibold leading-6">{t(locale, actionKey(resumeCode(openVisit.workflow)))}</span>
+            <span className="text-xs font-medium text-white/75">
+              {openVisit.typeLabel} · {formatWhen(openVisit.occurredAt, locale)}
+            </span>
+          </Link>
+          <Link
+            href={`/patients/${patientId}/visits/new`}
+            className="flex min-h-10 items-center justify-center text-sm font-semibold text-accent"
+          >
+            {t(locale, "startAnotherVisit")}
+          </Link>
+        </div>
+      ) : (
+        <Link
+          href={`/patients/${patientId}/visits/new`}
+          className="flex min-h-12 items-center justify-center rounded-2xl bg-accent px-4 text-base font-semibold text-white"
+        >
+          {t(locale, "newVisit")}
+        </Link>
+      )}
       <div className="rounded-2xl bg-card px-4 py-4 ring-1 ring-line">
         <p className="text-sm font-semibold text-muted">{t(locale, "profileSummary")}</p>
         <p className="mt-3 whitespace-pre-wrap text-[15px] leading-7 text-ink">
@@ -62,7 +84,7 @@ export function PatientCockpit({
         </p>
         {diagnosis?.trim() ? <p className="mt-3 text-sm text-muted">{diagnosis}</p> : null}
       </div>
-      {action.kind === "new" ? null : (
+      {action.kind === "new" || sameVisit ? null : (
         <Link
           href={action.href}
           className="flex min-h-12 flex-col items-center justify-center rounded-2xl bg-accent px-4 py-2 text-center text-white"
@@ -109,6 +131,13 @@ function FollowUpForms({ locale, patientId }: { locale: Locale; patientId: strin
       </details>
     </>
   );
+}
+
+function resumeCode(status: WorkflowLabel): "continue" | "transcribe" | "analyze" | "review" {
+  if (status === "TRANSMISSION_GENERATED") return "review";
+  if (status === "TRANSCRIBED") return "analyze";
+  if (status === "AUDIO_READY") return "transcribe";
+  return "continue";
 }
 
 function actionKey(code: "continue" | "transcribe" | "analyze" | "review"): MessageKey {

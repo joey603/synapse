@@ -46,6 +46,9 @@ export default async function PatientsPage({
     <div className="flex flex-col gap-5">
       <header>
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "patientsTitle")}</h1>
+        <p className="mt-1 text-sm font-medium tabular-nums text-muted">
+          {patients.length} {t(locale, patients.length === 1 ? "patientCountOne" : "patientCountMany")}
+        </p>
       </header>
 
       <Link
@@ -55,7 +58,7 @@ export default async function PatientsPage({
         {t(locale, "newPatient")}
       </Link>
 
-      <SearchField locale={locale} defaultValue={query} />
+      <SearchField locale={locale} defaultValue={query} params={tab === "all" ? { tab: "all" } : undefined} />
 
       <Suspense fallback={null}>
         <SegmentedControl

@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { Suspense } from "react";
 
+import { TaskInbox } from "@/components/tasks/TaskInbox";
 import { BackChevron } from "@/components/ui/BackChevron";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { VisitForm } from "@/components/visits/VisitForm";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
@@ -19,9 +22,9 @@ import {
 export default async function AgendaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; day?: string; edit?: string; error?: string }>;
+  searchParams: Promise<{ month?: string; day?: string; edit?: string; error?: string; tab?: string }>;
 }) {
-  const { month, day, edit, error } = await searchParams;
+  const { month, day, edit, error, tab = "visits" } = await searchParams;
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
   const now = new Date();
@@ -110,8 +113,19 @@ export default async function AgendaPage({
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "agendaTitle")}</h1>
         <p className="mt-1 text-sm text-muted">{t(locale, "agendaHint")}</p>
       </header>
+      <Suspense fallback={null}>
+        <SegmentedControl
+          scroll={false}
+          activeId={tab === "tasks" ? "tasks" : "visits"}
+          segments={[
+            { id: "visits", label: t(locale, "filterVisits"), href: `/agenda?month=${monthKey}` },
+            { id: "tasks", label: t(locale, "filterTasks"), href: `/agenda?tab=tasks` },
+          ]}
+        />
+      </Suspense>
+      {tab === "tasks" ? <TaskInbox locale={locale} next="/agenda?tab=tasks" /> : null}
 
-      <SurfaceCard className="p-3">
+      {tab === "tasks" ? null : <SurfaceCard className="p-3">
         <div className="flex items-center justify-between gap-2 px-1 pb-3">
           <Link
             href={`/agenda?month=${prev}`}
@@ -163,9 +177,9 @@ export default async function AgendaPage({
             );
           })}
         </div>
-      </SurfaceCard>
+      </SurfaceCard>}
 
-      {openSchedule && activeDay ? (
+      {tab === "tasks" ? null : openSchedule && activeDay ? (
         <section id="schedule" className="flex scroll-mt-4 flex-col gap-4">
           <div>
             <h2 className="text-sm font-semibold text-muted">{dayHeading(activeDay, locale, todayKey)}</h2>

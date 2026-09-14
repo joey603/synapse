@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { Suspense } from "react";
 
+import { TaskInbox } from "@/components/tasks/TaskInbox";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db } from "@/lib/db";
@@ -10,7 +13,8 @@ import { t, type MessageKey } from "@/lib/i18n/messages";
 import { formatJerusalemInput, jerusalemDateKey, jerusalemDayBounds } from "@/lib/visits/time";
 import { visitHrefForStatus, workflowStatus, type WorkflowLabel } from "@/lib/visits/workflow-status";
 
-export default async function TodayPage() {
+export default async function TodayPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab = "visits" } = await searchParams;
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
   const now = new Date();
@@ -68,15 +72,28 @@ export default async function TodayPage() {
         <p className="mt-1 text-sm capitalize text-muted">{dateLabel}</p>
       </header>
 
-      <div className="grid grid-cols-2 gap-2">
+      <Suspense fallback={null}>
+        <SegmentedControl
+          scroll={false}
+          activeId={tab === "tasks" ? "tasks" : "visits"}
+          segments={[
+            { id: "visits", label: t(locale, "filterVisits"), href: "/today" },
+            { id: "tasks", label: t(locale, "filterTasks"), href: "/today?tab=tasks" },
+          ]}
+        />
+      </Suspense>
+
+      {tab === "tasks" ? <TaskInbox locale={locale} next="/today?tab=tasks" /> : null}
+
+      {tab === "tasks" ? null : <div className="grid grid-cols-2 gap-2">
         <Count label={t(locale, "todayPlanned")} value={dated.length} />
         <Count label={t(locale, "todayInPerson")} value={dated.filter((visit) => visit.type === "IN_PERSON").length} />
         <Count label={t(locale, "todayVirtual")} value={dated.filter((visit) => visit.type === "VIRTUAL").length} />
         <Count label={t(locale, "todayOpenReports")} value={openReports} />
         <Count label={t(locale, "todayImportant")} value={important} wide />
-      </div>
+      </div>}
 
-      {dated.length === 0 ? (
+      {tab === "tasks" ? null : dated.length === 0 ? (
         <EmptyState title={t(locale, "agendaEmpty")} body={t(locale, "actionTodayHint")} />
       ) : (
         <SurfaceCard>
@@ -95,7 +112,7 @@ export default async function TodayPage() {
         </SurfaceCard>
       )}
 
-      {leftover.length > 0 ? (
+      {tab === "tasks" || leftover.length === 0 ? null : (
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold text-muted">{t(locale, "sectionFinish")}</h2>
           <SurfaceCard>
@@ -117,7 +134,7 @@ export default async function TodayPage() {
             ))}
           </SurfaceCard>
         </section>
-      ) : null}
+      )}
     </div>
   );
 }

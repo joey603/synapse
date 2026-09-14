@@ -10,7 +10,7 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
   const { taskId } = await context.params;
   const form = await request.formData();
   const next = form.get("next");
-  const back = typeof next === "string" && next.startsWith("/patients/") && !next.includes("://") ? next : "/tasks";
+  const back = safeNext(next);
   if (!isSameOrigin(request)) return NextResponse.redirect(appUrl(request, back), 303);
 
   const session = await getSession();
@@ -33,4 +33,10 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
     });
   }
   return NextResponse.redirect(appUrl(request, back), 303);
+}
+
+function safeNext(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/tasks";
+  if (value.includes("://") || value.includes("\\")) return "/tasks";
+  return value;
 }

@@ -1,15 +1,19 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { Suspense } from "react";
 
+import { TaskInbox } from "@/components/tasks/TaskInbox";
 import { BackChevron } from "@/components/ui/BackChevron";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 
-export default async function RecentVisitsPage() {
+export default async function RecentVisitsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab = "visits" } = await searchParams;
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
   const visits = await db.visit.findMany({
@@ -40,7 +44,17 @@ export default async function RecentVisitsPage() {
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "recentTitle")}</h1>
         <p className="mt-1 text-sm text-muted">{t(locale, "rowRecentHint")}</p>
       </header>
-      {visits.length === 0 ? (
+      <Suspense fallback={null}>
+        <SegmentedControl
+          scroll={false}
+          activeId={tab === "tasks" ? "tasks" : "visits"}
+          segments={[
+            { id: "visits", label: t(locale, "filterVisits"), href: "/visits" },
+            { id: "tasks", label: t(locale, "filterTasks"), href: "/visits?tab=tasks" },
+          ]}
+        />
+      </Suspense>
+      {tab === "tasks" ? <TaskInbox locale={locale} next="/visits?tab=tasks" /> : visits.length === 0 ? (
         <EmptyState title={t(locale, "recentEmpty")} body={t(locale, "recentHint")} />
       ) : (
         <SurfaceCard>

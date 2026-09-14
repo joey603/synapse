@@ -10,6 +10,8 @@ export async function loadVisitContext(patientId: string, visitId: string) {
   const patient = await db.patient.findUnique({
     where: { id: patientId },
     select: {
+      // Administratif privé volontairement absent : téléphone, adresse, ville,
+      // codes d’accès, proche, caisse. Jamais envoyé au modèle.
       firstName: true,
       lastName: true,
       birthDate: true,
