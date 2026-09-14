@@ -1,12 +1,14 @@
 import "server-only";
 
 import { createHmac, randomBytes } from "node:crypto";
-import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { after, NextResponse } from "next/server";
+import { cache } from "react";
 
 import { audit } from "@/lib/audit";
 import { LOCKOUT_AFTER, LOCKOUT_WINDOW_MS, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth/constants";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
 export type SessionUser = {
@@ -27,22 +29,26 @@ type LoginResult =
 
 let dummyHash: Promise<string> | null = null;
 
-export async function getSession(): Promise<SessionLookup> {
+export const getSession = cache(loadSession);
+
+async function loadSession(): Promise<SessionLookup> {
   const token = await readSessionCookie();
   if (!token) return { status: "anonymous" };
 
   try {
     const sessionToken = hashSessionToken(token);
-    const row = await db.session.findUnique({
-      where: { sessionToken },
-      select: {
-        id: true,
-        expires: true,
-        user: {
-          select: { id: true, name: true, email: true, role: true },
+    const row = await withDbRetry(() =>
+      db.session.findUnique({
+        where: { sessionToken },
+        select: {
+          id: true,
+          expires: true,
+          user: {
+            select: { id: true, name: true, email: true, role: true },
+          },
         },
-      },
-    });
+      }),
+    );
 
     if (!row) return { status: "invalid" };
 
@@ -52,8 +58,9 @@ export async function getSession(): Promise<SessionLookup> {
     }
 
     return { status: "ok", user: row.user };
-  } catch {
-    logger.error("auth.session_lookup_failed");
+  } catch (error) {
+    const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : "unknown";
+    logger.info("auth.session_lookup_failed", { code });
     return { status: "invalid" };
   }
 }
@@ -66,16 +73,18 @@ export async function loginWithPassword(email: string, password: string): Promis
   }
 
   try {
-    const lockedForMs = await lockoutRemainingMs(normalized);
+    const [lockedForMs, user] = await Promise.all([
+      lockoutRemainingMs(normalized),
+      db.user.findUnique({
+        where: { email: normalized },
+        select: { id: true, passwordHash: true },
+      }),
+    ]);
+
     if (lockedForMs > 0) {
       logger.info("auth.login", { result: "locked" });
       return { ok: false, code: "locked" };
     }
-
-    const user = await db.user.findUnique({
-      where: { email: normalized },
-      select: { id: true, passwordHash: true },
-    });
 
     const passwordOk = await verifyPassword(
       user?.passwordHash ?? (await getDummyHash()),
@@ -103,13 +112,15 @@ export async function loginWithPassword(email: string, password: string): Promis
       },
     });
 
-    await audit({
-      actorId: user.id,
-      action: "LOGIN_SUCCESS",
-      entityType: "User",
-      entityId: user.id,
-      metadata: { email: normalized },
-    });
+    after(() =>
+      audit({
+        actorId: user.id,
+        action: "LOGIN_SUCCESS",
+        entityType: "User",
+        entityId: user.id,
+        metadata: { email: normalized },
+      }).catch(() => logger.error("auth.login_audit_failed")),
+    );
     logger.info("auth.login", { result: "success" });
 
     return { ok: true, token };
@@ -125,22 +136,22 @@ export async function destroyCurrentSession() {
 
   try {
     const sessionToken = hashSessionToken(token);
-    const row = await db.session.findUnique({
+    const row = await db.session.delete({
       where: { sessionToken },
       select: { id: true, userId: true },
     });
 
-    if (!row) return;
-
-    await db.session.delete({ where: { id: row.id } });
-    await audit({
-      actorId: row.userId,
-      action: "LOGOUT",
-      entityType: "Session",
-      entityId: row.id,
-    });
+    after(() =>
+      audit({
+        actorId: row.userId,
+        action: "LOGOUT",
+        entityType: "Session",
+        entityId: row.id,
+      }).catch(() => logger.error("auth.logout_audit_failed")),
+    );
     logger.info("auth.logout");
-  } catch {
+  } catch (error) {
+    if (isNotFound(error)) return;
     logger.error("auth.logout_failed");
   }
 }
@@ -239,6 +250,10 @@ async function lockoutRemainingMs(email: string) {
   const lockMs = Math.min(LOCKOUT_WINDOW_MS, 60_000 * 2 ** extra);
   const lastFailure = failures[0];
   return Math.max(0, lastFailure.getTime() + lockMs - Date.now());
+}
+
+function isNotFound(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025";
 }
 
 function readEmail(metadata: unknown) {

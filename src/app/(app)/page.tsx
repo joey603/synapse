@@ -6,7 +6,7 @@ import { QuickActionGrid } from "@/components/ui/QuickActionGrid";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { getSession } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 import { jerusalemDateKey, jerusalemDayBounds, shiftJerusalemDay } from "@/lib/visits/time";
@@ -19,7 +19,7 @@ export default async function HomePage() {
   const { start, end } = jerusalemDayBounds();
 
   const now = new Date();
-  const [visitsToday, toValidate, nextVisit] = await Promise.all([
+  const [visitsToday, toValidate, nextVisit] = await withDbRetry(() => Promise.all([
     db.visit.count({ where: { occurredAt: { gte: start, lt: end } } }),
     db.clinicalReport.count({
       where: { status: { in: ["AI_GENERATED", "REVIEWED"] } },
@@ -29,7 +29,7 @@ export default async function HomePage() {
       orderBy: { occurredAt: "asc" },
       include: { patient: true },
     }),
-  ]);
+  ]));
 
   const dateLabel = new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
     timeZone: "Asia/Jerusalem",
@@ -40,7 +40,7 @@ export default async function HomePage() {
 
   const quickActions = [
     {
-      href: "/patients?tab=pending",
+      href: "/transmissions",
       title: t(locale, "actionValidate"),
       subtitle: `${toValidate} ${t(locale, "statValidate").toLocaleLowerCase()}`,
       icon: <CheckIcon />,
@@ -113,7 +113,7 @@ export default async function HomePage() {
           />
           <div className="border-t border-line/70" />
           <ActionRow
-            href="/patients?tab=pending"
+            href="/transmissions"
             title={t(locale, "rowPending")}
             subtitle={
               toValidate > 0

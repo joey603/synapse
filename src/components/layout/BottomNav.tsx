@@ -15,7 +15,10 @@ export function BottomNav({ locale }: { locale: Locale }) {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-      <div className="mx-auto flex max-w-lg rounded-3xl border border-line/80 bg-card shadow-[0_8px_24px_rgba(27,36,48,0.08)]">
+      <div
+        dir="ltr"
+        className="mx-auto flex max-w-lg rounded-3xl border border-line/80 bg-card shadow-[0_8px_24px_rgba(27,36,48,0.08)]"
+      >
         {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const Icon = item.icon;

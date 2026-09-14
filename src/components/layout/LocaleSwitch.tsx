@@ -4,7 +4,7 @@ import { t } from "@/lib/i18n/messages";
 
 export function LocaleSwitch({ locale }: { locale: Locale }) {
   return (
-    <div className="flex items-center rounded-full border border-line bg-card p-0.5">
+    <div dir="ltr" className="flex items-center rounded-full border border-line bg-card p-0.5">
       <span className="sr-only">{t(locale, "language")}</span>
       {(["fr", "he"] as const).map((code) => {
         const active = locale === code;

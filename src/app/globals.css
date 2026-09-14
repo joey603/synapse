@@ -31,3 +31,12 @@ a,
 input {
   -webkit-tap-highlight-color: transparent;
 }
+
+@keyframes synapse-loading {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}

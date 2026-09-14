@@ -20,6 +20,21 @@ export default async function RecentVisitsPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <Link
+        href="/"
+        className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted"
+      >
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden="true">
+          <path
+            d="M14.5 7.5 10 12l4.5 4.5"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        {t(locale, "home")}
+      </Link>
       <header>
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "recentTitle")}</h1>
         <p className="mt-1 text-sm text-muted">{t(locale, "rowRecentHint")}</p>

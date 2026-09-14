@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 
+import { PendingButton, PendingForm } from "@/components/auth/PendingButton";
 import { Mark } from "@/components/brand/Mark";
 import { LocaleSwitch } from "@/components/layout/LocaleSwitch";
 import { resolveLocale } from "@/lib/i18n/locale";
@@ -18,7 +19,7 @@ export default async function LoginPage({
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))]">
-      <header className="flex items-center justify-between">
+      <header dir="ltr" className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Mark />
           <div>
@@ -36,7 +37,7 @@ export default async function LoginPage({
           </h1>
           <p className="mt-2 text-[15px] leading-7 text-muted">{t(locale, "loginBody")}</p>
 
-          <form className="mt-6 flex flex-col gap-4" action="/api/auth/login" method="post">
+          <PendingForm action="/api/auth/login" className="mt-6 flex flex-col gap-4">
             {error ? (
               <p
                 className="rounded-2xl bg-danger-soft px-4 py-3 text-sm leading-6 text-danger"
@@ -66,13 +67,12 @@ export default async function LoginPage({
                 className="min-h-12 rounded-2xl border border-line/80 bg-surface px-4 text-base font-normal text-ink outline-none focus:ring-2 focus:ring-accent/30"
               />
             </label>
-            <button
-              type="submit"
-              className="mt-1 min-h-12 rounded-2xl bg-accent text-base font-semibold text-white"
-            >
-              {t(locale, "loginSubmit")}
-            </button>
-          </form>
+            <PendingButton
+              idle={t(locale, "loginSubmit")}
+              pending={t(locale, "loginPending")}
+              className="mt-1 min-h-12 rounded-2xl bg-accent text-base font-semibold text-white disabled:opacity-70"
+            />
+          </PendingForm>
         </div>
       </main>
 
