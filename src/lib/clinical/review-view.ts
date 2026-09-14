@@ -69,9 +69,13 @@ export function reviewItems(
     items.push({ code: "chart_quiet" });
   }
 
-  if (extraction.changes.some((change) => change.to !== "not_assessed" && change.to !== "not_reported")) {
+  if (
+    extraction.contradictions.length > 0 ||
+    extraction.changes.some((change) => change.to !== "not_assessed" && change.to !== "not_reported")
+  ) {
     items.push({ code: "contradiction" });
   }
+  if (extraction.medicationDiscrepancies.length > 0) items.push({ code: "dose_change" });
   if (extraction.downgraded.length > 0) items.push({ code: "downgraded" });
   if (visitDeltas(extraction, previous).some((delta) => delta.historical)) {
     items.push({ code: "gap" });

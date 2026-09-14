@@ -15,6 +15,7 @@ export interface TranscriptionProvider {
 
 export interface ClinicalLanguageProvider {
   extract(input: { transcript: string; context: string }): Promise<unknown>;
+  writeReport(input: { extraction: StoredExtraction }): Promise<{ text: string; model: string }>;
   generateReport(input: {
     extraction: StoredExtraction;
     visitType: VisitType;

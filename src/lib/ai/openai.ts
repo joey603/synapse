@@ -1,4 +1,3 @@
-import { composeReport } from "@/lib/clinical/compose-report";
 import { scrubForbidden } from "@/lib/clinical/forbidden-phrases";
 import { EXTRACTION_RULES, PROMPT_VERSION as EXTRACTION_PROMPT } from "../../../prompts/clinical-extraction";
 import { REPORT_RULES } from "../../../prompts/nursing-report-he";
@@ -33,18 +32,26 @@ export const openaiClinical: ClinicalLanguageProvider = {
   async extract(input) {
     const data = await chat({
       system: EXTRACTION_RULES,
-      user: `CONTEXTE HISTORIQUE, LECTURE SEULE, NE PAS LE TRAITER COMME UN CONSTAT DU JOUR.\n${input.context}\n\nTRANSCRIPTION DU JOUR.\n${input.transcript}`,
+      user: [
+        "CONTEXTE. L’historique et le dossier sont en lecture seule. Ils ne remplissent pas la visite actuelle.",
+        input.context,
+        "TRANSCRIPTION DE LA VISITE ACTUELLE. Seule source, avec les notes infirmières ci-dessus, pour affirmer le constat d’aujourd’hui.",
+        input.transcript,
+      ].join("\n\n"),
       json: true,
     });
     return JSON.parse(data);
   },
-  async generateReport(input) {
-    const drafted = composeReport(input);
+  async writeReport(input) {
     const data = await chat({
-      system: `${REPORT_RULES} Ne pas ajouter de fait absent du brouillon structuré.`,
-      user: drafted,
+      system: REPORT_RULES,
+      user: JSON.stringify(publicAnalysis(input.extraction)),
     });
-    return { text: scrubForbidden(data, input.extraction).text, model: clinicalModel() };
+    return { text: data, model: clinicalModel() };
+  },
+  async generateReport(input) {
+    const written = await openaiClinical.writeReport(input);
+    return { text: scrubForbidden(written.text, input.extraction).text, model: written.model };
   },
   async rewrite({ text, action, extraction }) {
     const data = await chat({
@@ -79,6 +86,19 @@ async function chat(input: { system: string; user: string; json?: boolean }) {
   const text = data.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error("provider_failed");
   return text;
+}
+
+function publicAnalysis(extraction: Parameters<typeof scrubForbidden>[1]) {
+  return {
+    facts: extraction.facts,
+    longitudinal: extraction.longitudinal,
+    interventions: extraction.interventions,
+    plan: extraction.plan,
+    contradictions: extraction.contradictions,
+    medicationDiscrepancies: extraction.medicationDiscrepancies,
+    pointsToVerify: extraction.pointsToVerify,
+    suggestedTasks: extraction.suggestedTasks,
+  };
 }
 
 export const openaiPromptVersion = EXTRACTION_PROMPT;

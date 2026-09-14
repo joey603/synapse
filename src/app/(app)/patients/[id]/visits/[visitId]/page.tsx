@@ -16,7 +16,7 @@ import { compareMedications } from "@/lib/clinical/medication-compare";
 import { comparisonRows, reviewItems, type ReviewItemCode } from "@/lib/clinical/review-view";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { parseStored } from "@/lib/clinical/schema";
-import type { ClinicalFact, FactDomain } from "@/lib/clinical/types";
+import type { ClinicalFact, Evolution, EvidenceTime, FactDomain, Speaker } from "@/lib/clinical/types";
 import { CLINICAL_DOMAINS, EXAM_DOMAINS, RISK_DOMAINS } from "@/lib/clinical/types";
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
@@ -149,14 +149,17 @@ export default async function VisitPage({
           </Suspense>
           {tab === "analysis" ? (
             extraction ? (
-              <AnalysisPanel
-                locale={locale}
-                visitId={visit.id}
-                patientId={id}
-                extraction={extraction}
-                previous={previousExtraction}
-                chart={visit.patient.medications}
-              />
+              <>
+                <AnalysisPanel
+                  locale={locale}
+                  visitId={visit.id}
+                  patientId={id}
+                  extraction={extraction}
+                  previous={previousExtraction}
+                  chart={visit.patient.medications}
+                />
+                <AnalysisExtras locale={locale} patientId={id} visitId={visit.id} extraction={extraction} />
+              </>
             ) : (
               <p className="text-sm text-muted">{t(locale, "analysisEmpty")}</p>
             )
@@ -506,10 +509,107 @@ function factRow(
     status: historical && !isMissing(fact) ? t(locale, "assertionHistorical") : t(locale, assertionKey(fact.assertion)),
     value: fact.value,
     quote,
+    evidenceNote: evidenceNote(locale, fact),
     sourceHref: quote ? `/patients/${patientId}/visits/${visitId}?tab=transcript&src=${encodeURIComponent(quote)}` : null,
     sourceLabel: t(locale, "seeSource"),
     historical,
   };
+}
+
+function evidenceNote(locale: ReturnType<typeof resolveLocale>, fact: ClinicalFact) {
+  if (fact.evidences.length === 0) return null;
+  return fact.evidences
+    .slice(0, 3)
+    .map((item) => {
+      const when = t(locale, TIME_KEYS[item.temporality]);
+      const who = t(locale, SPEAKER_KEYS[item.speaker]);
+      const extra = item.quote !== fact.evidence?.quote ? ` — ${item.quote}` : "";
+      return `${who} · ${when}${extra}`;
+    })
+    .join(" · ");
+}
+
+function AnalysisExtras({
+  locale,
+  patientId,
+  visitId,
+  extraction,
+}: {
+  locale: ReturnType<typeof resolveLocale>;
+  patientId: string;
+  visitId: string;
+  extraction: NonNullable<ReturnType<typeof parseStored>>;
+}) {
+  const evolution = Object.entries(extraction.longitudinal) as Array<[FactDomain, Evolution]>;
+  const cards: Array<{ id: string; title: string; rows: string[] }> = [];
+  if (evolution.length > 0) {
+    cards.push({
+      id: "evolution",
+      title: t(locale, "sectionEvolution"),
+      rows: evolution.map(([domain, value]) => `${t(locale, domainLabel(domain))} — ${t(locale, EVOLUTION_KEYS[value])}`),
+    });
+  }
+  if (extraction.interventions.length > 0) {
+    cards.push({ id: "interventions", title: t(locale, "sectionInterventions"), rows: extraction.interventions.map((item) => item.text) });
+  }
+  if (extraction.plan.length > 0) {
+    cards.push({ id: "plan", title: t(locale, "sectionPlan"), rows: extraction.plan.map((item) => item.text) });
+  }
+  if (extraction.contradictions.length > 0) {
+    cards.push({ id: "contradictions", title: t(locale, "sectionContradictions"), rows: extraction.contradictions.map((item) => item.summary) });
+  }
+  if (extraction.medicationDiscrepancies.length > 0) {
+    cards.push({
+      id: "discrepancies",
+      title: t(locale, "sectionDiscrepancies"),
+      rows: extraction.medicationDiscrepancies.map(
+        (item) => `${item.medication}: ${item.recordDose ?? "—"} → ${item.reportedDose}. ${t(locale, "reviewNeeded")}`,
+      ),
+    });
+  }
+  if (extraction.pointsToVerify.length > 0) {
+    cards.push({ id: "verify", title: t(locale, "sectionVerify"), rows: extraction.pointsToVerify });
+  }
+
+  if (cards.length === 0 && extraction.suggestedTasks.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {cards.map((card) => (
+        <section key={card.id} className="rounded-3xl bg-card px-4 py-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+          <h2 className="text-[15px] font-semibold text-ink">{card.title}</h2>
+          <ul className="mt-2 flex flex-col gap-2">
+            {card.rows.map((row) => (
+              <li key={row} className="text-sm leading-6 text-ink">
+                {row}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      {extraction.suggestedTasks.length > 0 ? (
+        <section className="rounded-3xl bg-card px-4 py-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+          <h2 className="text-[15px] font-semibold text-ink">{t(locale, "sectionSuggestedTasks")}</h2>
+          <ul className="mt-2 flex flex-col gap-3">
+            {extraction.suggestedTasks.map((task) => (
+              <li key={task} className="flex flex-col gap-2">
+                <p className="text-sm leading-6 text-ink">{task}</p>
+                <form action={`/api/patients/${patientId}/tasks`} method="post">
+                  <input type="hidden" name="visitId" value={visitId} />
+                  <input type="hidden" name="next" value={`/patients/${patientId}/visits/${visitId}?tab=analysis`} />
+                  <input type="hidden" name="title" value={task} />
+                  <input type="hidden" name="priority" value="NORMAL" />
+                  <button className="min-h-10 rounded-xl bg-terra px-3 text-sm font-semibold text-white">
+                    {t(locale, "addSuggestedTask")}
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  );
 }
 
 function alertLines(
@@ -581,6 +681,31 @@ const DOMAIN_KEYS: Record<FactDomain, MessageKey> = {
 function domainLabel(domain: string): MessageKey {
   return DOMAIN_KEYS[domain as FactDomain] ?? "badgeMissing";
 }
+
+const EVOLUTION_KEYS: Record<Evolution, MessageKey> = {
+  improved: "evolutionImproved",
+  worsened: "evolutionWorsened",
+  stable: "evolutionStable",
+  new: "evolutionNew",
+  resolved: "evolutionResolved",
+  unclear: "evolutionUnclear",
+  not_reassessed: "evolutionNotReassessed",
+};
+
+const SPEAKER_KEYS: Record<Speaker, MessageKey> = {
+  PATIENT: "speakerPatient",
+  FAMILY: "speakerFamily",
+  NURSE: "speakerNurse",
+  OTHER_CLINICIAN: "speakerOther",
+  UNKNOWN: "speakerUnknown",
+};
+
+const TIME_KEYS: Record<EvidenceTime, MessageKey> = {
+  CURRENT: "timeCurrent",
+  RECENT_PAST: "timeRecent",
+  HISTORICAL: "timeHistorical",
+  UNCLEAR: "timeUnclear",
+};
 
 const REVIEW_KEYS: Record<ReviewItemCode, MessageKey> = {
   risk_missing: "flagRiskMissing",

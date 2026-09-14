@@ -81,12 +81,32 @@ export type Temporality = "current_visit" | "historical" | "unknown";
 export type SourceKind = "transcript" | "patient_record" | "previous_validated_visit";
 export type Confidence = "high" | "medium" | "low";
 
+export const SPEAKERS = ["PATIENT", "FAMILY", "NURSE", "OTHER_CLINICIAN", "UNKNOWN"] as const;
+export type Speaker = (typeof SPEAKERS)[number];
+
+export const EVIDENCE_SOURCES = ["TRANSCRIPT", "NURSE_NOTE"] as const;
+export type EvidenceSource = (typeof EVIDENCE_SOURCES)[number];
+
+export const EVIDENCE_TIMES = ["CURRENT", "RECENT_PAST", "HISTORICAL", "UNCLEAR"] as const;
+export type EvidenceTime = (typeof EVIDENCE_TIMES)[number];
+
+export const EVOLUTIONS = ["improved", "worsened", "stable", "new", "resolved", "unclear", "not_reassessed"] as const;
+export type Evolution = (typeof EVOLUTIONS)[number];
+
+export type EvidenceItem = {
+  quote: string;
+  speaker: Speaker;
+  source: EvidenceSource;
+  temporality: EvidenceTime;
+};
+
 export type ClinicalFact = {
   value: string | null;
   assertion: Assertion;
   temporality: Temporality;
   source: SourceKind;
   evidence: { quote: string } | null;
+  evidences: EvidenceItem[];
   confidence: Confidence;
 };
 
@@ -107,12 +127,46 @@ export type ExtractionChange = {
   to: Assertion;
 };
 
+export type CitedItem = {
+  text: string;
+  evidence: EvidenceItem[];
+};
+
+export type ContradictionKind =
+  | "patient_family"
+  | "patient_chart"
+  | "medication"
+  | "today_history"
+  | "same_interview"
+  | "other";
+
+export type Contradiction = {
+  kind: ContradictionKind;
+  summary: string;
+  evidence: EvidenceItem[];
+};
+
+export type MedicationDiscrepancy = {
+  medication: string;
+  recordDose: string | null;
+  reportedDose: string;
+  requiresHumanReview: true;
+};
+
 export type StoredExtraction = {
   facts: Record<FactDomain, ClinicalFact>;
   medicationMentions: ClinicalFact[];
   changes: ExtractionChange[];
   reviewFlags: ReviewFlag[];
   downgraded: string[];
+  longitudinal: Partial<Record<FactDomain, Evolution>>;
+  interventions: CitedItem[];
+  plan: CitedItem[];
+  contradictions: Contradiction[];
+  medicationDiscrepancies: MedicationDiscrepancy[];
+  pointsToVerify: string[];
+  suggestedTasks: string[];
+  finalReportHe: string | null;
 };
 
 export function emptyFact(): ClinicalFact {
@@ -122,6 +176,11 @@ export function emptyFact(): ClinicalFact {
     temporality: "unknown",
     source: "transcript",
     evidence: null,
+    evidences: [],
     confidence: "low",
   };
+}
+
+export function currentQuote(fact: ClinicalFact) {
+  return fact.evidences.find((item) => item.temporality === "CURRENT")?.quote ?? fact.evidence?.quote ?? null;
 }

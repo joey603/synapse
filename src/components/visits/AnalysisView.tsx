@@ -9,6 +9,7 @@ export type AnalysisRow = {
   status: string;
   value: string | null;
   quote: string | null;
+  evidenceNote: string | null;
   sourceHref: string | null;
   sourceLabel: string;
   historical: boolean;
@@ -168,6 +169,7 @@ function FactRow({ row }: { row: AnalysisRow }) {
       </div>
       <p className={`mt-1 text-sm leading-6 ${row.historical ? "text-muted" : "text-ink"}`}>{row.status}</p>
       {row.value ? <p className="mt-1 text-sm leading-6 text-ink">{row.value}</p> : null}
+      {row.evidenceNote ? <p className="mt-1 text-xs leading-5 text-muted">{row.evidenceNote}</p> : null}
       {row.quote && row.sourceHref ? (
         <Link href={row.sourceHref} className="mt-1 inline-flex text-xs font-semibold text-accent">
           {row.sourceLabel}

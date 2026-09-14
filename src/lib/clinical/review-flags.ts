@@ -38,7 +38,8 @@ export function reviewFlags(
     }
   }
 
-  if (extraction.changes.length > 0) flags.push({ code: "contradiction" });
+  if (extraction.changes.length > 0 || extraction.contradictions.length > 0) flags.push({ code: "contradiction" });
+  if (extraction.medicationDiscrepancies.length > 0) flags.push({ code: "dose_uncertain" });
   if (extraction.downgraded.length > 0) flags.push({ code: "downgraded" });
 
   return flags;

@@ -7,7 +7,7 @@ import { getClinicalProvider, getTranscriptionProvider, providerName } from "@/l
 import { audit } from "@/lib/audit";
 import { diffValidated } from "@/lib/clinical/diff";
 import { composeReport } from "@/lib/clinical/compose-report";
-import { scrubForbidden } from "@/lib/clinical/forbidden-phrases";
+import { hebrewNeedsRewrite, scrubForbidden } from "@/lib/clinical/forbidden-phrases";
 import { reviewFlags } from "@/lib/clinical/review-flags";
 import { validateExtraction } from "@/lib/clinical/validators";
 import { parseStored } from "@/lib/clinical/schema";
@@ -191,7 +191,7 @@ async function extract(
     throw new Error("extraction_failed");
   }
 
-  const validated = validateExtraction(raw, visit.transcript!.rawText);
+  const validated = validateExtraction(raw, visit.transcript!.rawText, visit.notes ?? "");
   if (!validated) {
     await audit({
       actorId,
@@ -212,7 +212,7 @@ async function extract(
   await db.clinicalExtraction.create({
     data: {
       visitId: visit.id,
-      schemaVersion: "1",
+      schemaVersion: "2",
       promptVersion: EXTRACTION_PROMPT,
       provider: providerName(),
       model: providerName() === "openai" ? process.env.AI_CLINICAL_MODEL || "openai" : "fake-extract",
@@ -250,25 +250,9 @@ async function generate(
   let text: string;
   let model: string;
   try {
-    if (providerName() === "fake") {
-      const composed = composeReport({
-        extraction,
-        visitType: visit.type,
-        occurredAt: visit.occurredAt,
-        patientName: `${visit.patient.firstName} ${visit.patient.lastName}`,
-      });
-      text = scrubForbidden(composed, extraction).text;
-      model = "fake-report";
-    } else {
-      const result = await getClinicalProvider().generateReport({
-        extraction,
-        visitType: visit.type,
-        occurredAt: visit.occurredAt,
-        patientName: `${visit.patient.firstName} ${visit.patient.lastName}`,
-      });
-      text = result.text;
-      model = result.model;
-    }
+    const drafted = await draftHebrew(visit, extraction);
+    text = drafted.text;
+    model = drafted.model;
   } catch {
     throw new Error("generation_failed");
   }
@@ -287,6 +271,10 @@ async function generate(
       promptVersion: REPORT_PROMPT,
     },
   });
+  await db.clinicalExtraction.update({
+    where: { visitId: visit.id },
+    data: { payload: { ...extraction, finalReportHe: text } },
+  });
   await db.visit.update({
     where: { id: visit.id },
     data: { pipelineStatus: "READY", failureCode: null },
@@ -300,6 +288,35 @@ async function generate(
     visitId: visit.id,
     metadata: { prompt: REPORT_PROMPT },
   });
+}
+
+async function draftHebrew(
+  visit: NonNullable<Awaited<ReturnType<typeof reload>>>,
+  extraction: NonNullable<ReturnType<typeof parseStored>>,
+) {
+  const fallback = () =>
+    scrubForbidden(
+      composeReport({
+        extraction,
+        visitType: visit.type,
+        occurredAt: visit.occurredAt,
+        patientName: `${visit.patient.firstName} ${visit.patient.lastName}`,
+      }),
+      extraction,
+    ).text;
+
+  if (providerName() === "fake") {
+    return { text: fallback(), model: "fake-report" };
+  }
+
+  const proposed = extraction.finalReportHe?.trim() ?? "";
+  const first = proposed ? scrubForbidden(proposed, extraction) : null;
+  if (!hebrewNeedsRewrite(extraction, proposed) && first) return { text: first.text, model: "validated-json" };
+
+  const rewritten = await getClinicalProvider().writeReport({ extraction });
+  const second = scrubForbidden(rewritten.text, extraction);
+  if (!second.replaced && second.text.trim()) return { text: second.text, model: rewritten.model };
+  return { text: fallback(), model: "composed-fallback" };
 }
 
 async function previousExtraction(patientId: string, visitId: string) {

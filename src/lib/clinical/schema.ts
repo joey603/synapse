@@ -1,35 +1,88 @@
 import { z } from "zod";
 
-import { FACT_DOMAINS, emptyFact, type ClinicalFact, type FactDomain, type StoredExtraction } from "@/lib/clinical/types";
+import {
+  EVIDENCE_SOURCES,
+  EVIDENCE_TIMES,
+  EVOLUTIONS,
+  FACT_DOMAINS,
+  SPEAKERS,
+  emptyFact,
+  type ClinicalFact,
+  type Contradiction,
+  type ContradictionKind,
+  type EvidenceItem,
+  type Evolution,
+  type FactDomain,
+  type MedicationDiscrepancy,
+  type StoredExtraction,
+} from "@/lib/clinical/types";
 
 const assertion = z.enum(["present", "explicitly_denied", "not_assessed", "not_reported", "uncertain"]);
 const temporality = z.enum(["current_visit", "historical", "unknown"]);
 const source = z.enum(["transcript", "patient_record", "previous_validated_visit"]);
 const confidence = z.enum(["high", "medium", "low"]);
+const speaker = z.enum(SPEAKERS);
+const evidenceSource = z.enum(EVIDENCE_SOURCES);
+const evidenceTime = z.enum(EVIDENCE_TIMES);
+
+const evidenceItemSchema = z.object({
+  quote: z.string(),
+  speaker: speaker.optional(),
+  source: evidenceSource.optional(),
+  temporality: evidenceTime.optional(),
+});
+
+const legacyEvidence = z.object({ quote: z.string() });
 
 export const clinicalFactSchema = z.object({
   value: z.string().nullable().optional(),
   assertion: assertion.optional(),
   temporality: temporality.optional(),
   source: source.optional(),
-  evidence: z.object({ quote: z.string() }).nullable().optional(),
+  evidence: z.union([legacyEvidence, z.array(evidenceItemSchema)]).nullable().optional(),
+  evidences: z.array(evidenceItemSchema).optional(),
   confidence: confidence.optional(),
+});
+
+const citedSchema = z.object({
+  text: z.string(),
+  evidence: z.array(evidenceItemSchema).optional(),
+  quote: z.string().optional(),
 });
 
 export const extractionSchema = z.object({
   facts: z.record(z.string(), clinicalFactSchema).optional(),
   medicationMentions: z.array(clinicalFactSchema).optional(),
+  longitudinal: z.record(z.string(), z.string()).optional(),
+  interventions: z.array(citedSchema).optional(),
+  plan: z.array(citedSchema).optional(),
+  contradictions: z.array(z.object({
+    kind: z.string().optional(),
+    summary: z.string().optional(),
+    evidence: z.array(evidenceItemSchema).optional(),
+  })).optional(),
+  medicationDiscrepancies: z.array(z.object({
+    medication: z.string().optional(),
+    recordDose: z.string().nullable().optional(),
+    reportedDose: z.string().optional(),
+  })).optional(),
+  pointsToVerify: z.array(z.string()).optional(),
+  suggestedTasks: z.array(z.string()).optional(),
+  finalReportHe: z.string().nullable().optional(),
 });
 
 export function coerceFact(raw: z.infer<typeof clinicalFactSchema> | undefined): ClinicalFact {
   const base = emptyFact();
   if (!raw) return base;
+  const evidences = readEvidences(raw);
+  const current = evidences.find((item) => item.temporality === "CURRENT");
   return {
     value: raw.value?.trim() ? raw.value.trim().slice(0, 500) : null,
     assertion: raw.assertion ?? base.assertion,
-    temporality: raw.temporality ?? base.temporality,
-    source: raw.source ?? base.source,
-    evidence: raw.evidence?.quote?.trim() ? { quote: raw.evidence.quote.trim().slice(0, 400) } : null,
+    temporality: raw.temporality ?? (current ? "current_visit" : base.temporality),
+    source: raw.source ?? (current?.source === "NURSE_NOTE" ? "transcript" : base.source),
+    evidence: current ? { quote: current.quote } : null,
+    evidences,
     confidence: raw.confidence ?? base.confidence,
   };
 }
@@ -43,9 +96,25 @@ export function coerceExtraction(raw: unknown) {
     facts[domain] = coerceFact(parsed.data.facts?.[domain]);
   }
 
+  const longitudinal: Partial<Record<FactDomain, Evolution>> = {};
+  for (const domain of FACT_DOMAINS) {
+    const value = parsed.data.longitudinal?.[domain];
+    if (value && (EVOLUTIONS as readonly string[]).includes(value)) {
+      longitudinal[domain] = value as Evolution;
+    }
+  }
+
   return {
     facts,
     medicationMentions: (parsed.data.medicationMentions ?? []).map((item) => coerceFact(item)).slice(0, 12),
+    longitudinal,
+    interventions: (parsed.data.interventions ?? []).map(readCited).filter((item) => item.text).slice(0, 16),
+    plan: (parsed.data.plan ?? []).map(readCited).filter((item) => item.text).slice(0, 16),
+    contradictions: (parsed.data.contradictions ?? []).flatMap(readContradiction).slice(0, 12),
+    medicationDiscrepancies: (parsed.data.medicationDiscrepancies ?? []).flatMap(readDiscrepancy).slice(0, 12),
+    pointsToVerify: cleanLines(parsed.data.pointsToVerify),
+    suggestedTasks: cleanLines(parsed.data.suggestedTasks),
+    finalReportHe: parsed.data.finalReportHe?.trim() || null,
   };
 }
 
@@ -55,7 +124,8 @@ export function parseStored(payload: unknown): StoredExtraction | null {
   if (!value.facts?.suicidality?.assertion) return null;
   const facts = {} as Record<FactDomain, ClinicalFact>;
   for (const domain of FACT_DOMAINS) {
-    facts[domain] = value.facts[domain] ?? emptyFact();
+    const fact = value.facts[domain] ?? emptyFact();
+    facts[domain] = { ...emptyFact(), ...fact, evidences: fact.evidences ?? [] };
   }
   return {
     facts,
@@ -63,5 +133,83 @@ export function parseStored(payload: unknown): StoredExtraction | null {
     changes: value.changes ?? [],
     reviewFlags: value.reviewFlags ?? [],
     downgraded: value.downgraded ?? [],
+    longitudinal: value.longitudinal ?? {},
+    interventions: value.interventions ?? [],
+    plan: value.plan ?? [],
+    contradictions: value.contradictions ?? [],
+    medicationDiscrepancies: value.medicationDiscrepancies ?? [],
+    pointsToVerify: value.pointsToVerify ?? [],
+    suggestedTasks: value.suggestedTasks ?? [],
+    finalReportHe: value.finalReportHe ?? null,
   };
+}
+
+function readEvidences(raw: z.infer<typeof clinicalFactSchema>): EvidenceItem[] {
+  const listed = raw.evidences ?? (Array.isArray(raw.evidence) ? raw.evidence : []);
+  const fromList = listed.map(readEvidence).filter((item): item is EvidenceItem => item != null);
+  if (fromList.length > 0) return fromList.slice(0, 8);
+  if (raw.evidence && !Array.isArray(raw.evidence) && raw.evidence.quote?.trim()) {
+    return [{
+      quote: raw.evidence.quote.trim().slice(0, 400),
+      speaker: "PATIENT",
+      source: "TRANSCRIPT",
+      temporality: "CURRENT",
+    }];
+  }
+  return [];
+}
+
+function readEvidence(raw: z.infer<typeof evidenceItemSchema>): EvidenceItem | null {
+  const quote = raw.quote?.trim().slice(0, 400);
+  if (!quote) return null;
+  return {
+    quote,
+    speaker: raw.speaker ?? "UNKNOWN",
+    source: raw.source ?? "TRANSCRIPT",
+    temporality: raw.temporality ?? "CURRENT",
+  };
+}
+
+function readCited(raw: z.infer<typeof citedSchema>) {
+  const evidence = (raw.evidence ?? []).map(readEvidence).filter((item): item is EvidenceItem => item != null);
+  if (evidence.length === 0 && raw.quote?.trim()) {
+    evidence.push({
+      quote: raw.quote.trim().slice(0, 400),
+      speaker: "UNKNOWN",
+      source: "TRANSCRIPT",
+      temporality: "CURRENT",
+    });
+  }
+  return { text: raw.text.trim().slice(0, 400), evidence };
+}
+
+const CONTRADICTION_KINDS = ["patient_family", "patient_chart", "medication", "today_history", "same_interview", "other"] as const;
+
+function readContradiction(raw: { kind?: string; summary?: string; evidence?: z.infer<typeof evidenceItemSchema>[] }): Contradiction[] {
+  const summary = raw.summary?.trim().slice(0, 400);
+  if (!summary) return [];
+  const kind = (CONTRADICTION_KINDS as readonly string[]).includes(raw.kind ?? "")
+    ? (raw.kind as ContradictionKind)
+    : "other";
+  return [{
+    kind,
+    summary,
+    evidence: (raw.evidence ?? []).map(readEvidence).filter((item): item is EvidenceItem => item != null),
+  }];
+}
+
+function readDiscrepancy(raw: { medication?: string; recordDose?: string | null; reportedDose?: string }): MedicationDiscrepancy[] {
+  const medication = raw.medication?.trim().slice(0, 120);
+  const reportedDose = raw.reportedDose?.trim().slice(0, 80);
+  if (!medication || !reportedDose) return [];
+  return [{
+    medication,
+    recordDose: raw.recordDose?.trim().slice(0, 80) || null,
+    reportedDose,
+    requiresHumanReview: true,
+  }];
+}
+
+function cleanLines(values: string[] | undefined) {
+  return (values ?? []).map((item) => item.trim().slice(0, 240)).filter(Boolean).slice(0, 12);
 }

@@ -23,3 +23,9 @@ export function scrubForbidden(text: string, extraction: StoredExtraction) {
 
   return { text: next, replaced };
 }
+
+export function hebrewNeedsRewrite(extraction: StoredExtraction, proposed: string | null | undefined) {
+  const text = proposed?.trim() ?? "";
+  if (!text || extraction.downgraded.length > 0) return true;
+  return scrubForbidden(text, extraction).replaced;
+}

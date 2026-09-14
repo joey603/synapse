@@ -21,6 +21,14 @@ export const fakeClinical: ClinicalLanguageProvider = {
   async extract({ transcript }) {
     return fixtureExtraction(transcript.includes("אני לא חושב על מוות") ? "denial" : "default");
   },
+  async writeReport(input) {
+    return this.generateReport({
+      extraction: input.extraction,
+      visitType: "IN_PERSON",
+      occurredAt: new Date(),
+      patientName: "",
+    });
+  },
   async generateReport(input) {
     const composed = composeReport(input);
     return { text: scrubForbidden(composed, input.extraction).text, model: "fake-report" };
