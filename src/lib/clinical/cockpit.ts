@@ -109,7 +109,7 @@ function actionCode(status: "DRAFT" | "AUDIO_READY" | "TRANSCRIBED" | "ANALYZED"
 }
 
 function taskHref(patientId: string, taskId: string) {
-  return `/patients/${patientId}?tab=timeline&filter=tasks#task-${taskId}`;
+  return `/patients/${patientId}?tab=tasks#task-${taskId}`;
 }
 
 function day(value: Date | null) {

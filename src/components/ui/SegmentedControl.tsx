@@ -9,10 +9,18 @@ export type Segment = {
   href: string;
 };
 
-export function SegmentedControl({ segments }: { segments: Segment[] }) {
+export function SegmentedControl({
+  segments,
+  scroll = true,
+  activeId,
+}: {
+  segments: Segment[];
+  scroll?: boolean;
+  activeId?: string;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const current = searchParams.get("tab") ?? segments[0]?.id;
+  const current = activeId ?? searchParams.get("tab") ?? segments[0]?.id;
 
   return (
     <div className="flex rounded-2xl bg-surface p-1">
@@ -26,7 +34,8 @@ export function SegmentedControl({ segments }: { segments: Segment[] }) {
           <Link
             key={segment.id}
             href={href}
-            className={`flex min-h-10 flex-1 items-center justify-center rounded-xl px-3 text-sm font-semibold transition-colors ${
+            scroll={scroll}
+            className={`flex min-h-10 flex-1 items-center justify-center rounded-xl px-1.5 text-center text-sm font-semibold leading-4 transition-colors ${
               active ? "bg-card text-ink shadow-[0_2px_8px_rgba(27,36,48,0.06)]" : "text-muted"
             }`}
           >

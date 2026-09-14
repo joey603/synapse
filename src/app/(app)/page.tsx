@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 
 import { ActionRow } from "@/components/ui/ActionRow";
 import { QuickActionGrid } from "@/components/ui/QuickActionGrid";
-import { SearchField } from "@/components/ui/SearchField";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { getSession } from "@/lib/auth/session";
@@ -62,8 +61,6 @@ export default async function HomePage() {
           </h1>
         </div>
       </header>
-
-      <SearchField locale={locale} action="/search" />
 
       <Link
         href={

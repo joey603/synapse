@@ -8,7 +8,9 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request, context: { params: Promise<{ taskId: string }> }) {
   const { taskId } = await context.params;
-  const back = "/tasks";
+  const form = await request.formData();
+  const next = form.get("next");
+  const back = typeof next === "string" && next.startsWith("/patients/") && !next.includes("://") ? next : "/tasks";
   if (!isSameOrigin(request)) return NextResponse.redirect(appUrl(request, back), 303);
 
   const session = await getSession();
@@ -16,11 +18,15 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
   if (session.status !== "ok") return NextResponse.redirect(appUrl(request, "/login"), 303);
 
   const task = await db.task.findUnique({ where: { id: taskId }, select: { id: true, patientId: true, status: true } });
-  if (task && task.status !== "DONE") {
-    await db.task.update({ where: { id: task.id }, data: { status: "DONE", completedAt: new Date() } });
+  if (task) {
+    const done = task.status === "DONE";
+    await db.task.update({
+      where: { id: task.id },
+      data: done ? { status: "TODO", completedAt: null } : { status: "DONE", completedAt: new Date() },
+    });
     await audit({
       actorId: session.user.id,
-      action: "TASK_DONE",
+      action: done ? "TASK_REOPENED" : "TASK_DONE",
       entityType: "Task",
       entityId: task.id,
       patientId: task.patientId,

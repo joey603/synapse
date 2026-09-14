@@ -13,19 +13,20 @@ export default async function TasksPage() {
   const locale = resolveLocale(store.get("synapse_locale")?.value);
   const today = jerusalemDateKey(new Date());
   const tasks = await db.task.findMany({
-    where: { status: { not: "DONE" } },
     orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
     take: 80,
     include: { patient: { select: { firstName: true, lastName: true } } },
   });
 
   const waiting = tasks.filter((task) => task.status === "WAITING");
-  const open = tasks.filter((task) => task.status !== "WAITING");
+  const done = tasks.filter((task) => task.status === "DONE");
+  const open = tasks.filter((task) => task.status === "TODO");
   const groups = [
     { id: "overdue", label: "tasksOverdue" as const, rows: open.filter((task) => task.dueDate && day(task.dueDate) < today) },
     { id: "today", label: "agendaToday" as const, rows: open.filter((task) => task.dueDate && day(task.dueDate) === today) },
     { id: "upcoming", label: "tasksUpcoming" as const, rows: open.filter((task) => !task.dueDate || day(task.dueDate) > today) },
     { id: "waiting", label: "taskWaiting" as const, rows: waiting },
+    { id: "done", label: "taskFinished" as const, rows: done },
   ].filter((group) => group.rows.length > 0);
 
   return (
@@ -41,17 +42,23 @@ export default async function TasksPage() {
             {group.rows.map((task, index) => (
               <div key={task.id}>
                 {index > 0 ? <div className="border-t border-line/70" /> : null}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <Link href={`/patients/${task.patientId}?tab=timeline&filter=tasks#task-${task.id}`} className="min-w-0 flex-1">
-                    <span className="block truncate text-[15px] font-semibold text-ink">{task.title}</span>
-                    <span className="block truncate text-sm text-muted">
+                <div className={`flex items-center gap-3 px-4 py-3 ${task.status === "DONE" ? "opacity-60" : ""}`}>
+                  <Link href={`/patients/${task.patientId}?tab=tasks#task-${task.id}`} className="min-w-0 flex-1">
+                    <span className={`block truncate text-[15px] font-semibold ${task.status === "DONE" ? "text-faint line-through" : "text-ink"}`}>
+                      {task.title}
+                    </span>
+                    <span className={`block truncate text-sm ${task.status === "DONE" ? "text-faint line-through" : "text-muted"}`}>
                       {task.patient.firstName} {task.patient.lastName}
                       {task.dueDate ? ` · ${formatDay(task.dueDate, locale)}` : ""}
                       {task.priority !== "NORMAL" ? ` · ${t(locale, priorityKey(task.priority))}` : ""}
                     </span>
                   </Link>
                   <form action={`/api/tasks/${task.id}/done`} method="post">
-                    <button className="min-h-11 rounded-xl bg-accent px-3 text-sm font-semibold text-white">{t(locale, "taskDone")}</button>
+                    <button
+                      className={`min-h-11 rounded-xl px-3 text-sm font-semibold ${task.status === "DONE" ? "bg-surface text-muted" : "bg-accent text-white"}`}
+                    >
+                      {t(locale, task.status === "DONE" ? "taskReopen" : "taskDone")}
+                    </button>
                   </form>
                 </div>
               </div>

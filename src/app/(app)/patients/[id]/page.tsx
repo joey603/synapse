@@ -2,7 +2,6 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 
-import { PathwaySummary } from "@/components/patient/PathwaySummary";
 import { PatientCockpit } from "@/components/patient/PatientCockpit";
 import { PatientDetailTabs } from "@/components/patient/PatientDetailTabs";
 import { PatientTimeline } from "@/components/patient/PatientTimeline";
@@ -11,7 +10,6 @@ import { BackChevron } from "@/components/ui/BackChevron";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { jerusalemDay } from "@/lib/clinical/cockpit";
-import { parseStored } from "@/lib/clinical/schema";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
@@ -65,29 +63,8 @@ export default async function PatientDetailPage({
       pipelineStatus: visit.pipelineStatus,
     }),
   }));
-  const lastVisit = timed.find((visit) => visit.occurredAt.getTime() <= now.getTime()) ?? null;
   const nextVisit = [...timed].reverse().find((visit) => visit.occurredAt.getTime() > now.getTime()) ?? null;
   const unfinished = timed.find((visit) => visit.occurredAt.getTime() <= now.getTime() && visit.workflow !== "VALIDATED") ?? null;
-  const latest = await db.clinicalExtraction.findFirst({
-    where: { visit: { patientId: id, report: { status: "VALIDATED" } } },
-    orderBy: { visit: { occurredAt: "desc" } },
-    select: { payload: true },
-  });
-  const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const windowStart = patient.admittedAt && patient.admittedAt < since ? patient.admittedAt : since;
-  const pathwayFacts = await db.clinicalExtraction.findMany({
-    where: { visit: { patientId: id, occurredAt: { gte: windowStart }, report: { status: "VALIDATED" } } },
-    orderBy: { visit: { occurredAt: "desc" } },
-    take: 12,
-    select: { payload: true, visit: { select: { occurredAt: true } } },
-  });
-  const treatmentEvent = patient.events.find((event) => event.kind === "TREATMENT") ?? null;
-  const treatmentMed = [...patient.medications].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
-  const treatment = treatmentEvent
-    ? { title: treatmentEvent.title, when: formatDay(treatmentEvent.occurredAt, locale) }
-    : treatmentMed
-      ? { title: t(locale, "treatmentKnown"), when: formatDay(treatmentMed.updatedAt, locale) }
-      : null;
   const identity = identityRows(locale, patient);
 
   return (
@@ -123,32 +100,12 @@ export default async function PatientDetailPage({
         locale={locale}
         patientId={patient.id}
         today={jerusalemDay(now)}
-        lastVisit={lastVisit ? { id: lastVisit.id, occurredAt: lastVisit.occurredAt, typeLabel: t(locale, visitTypeLabel(lastVisit.type)), workflow: lastVisit.workflow } : null}
         nextVisit={nextVisit ? { id: nextVisit.id, occurredAt: nextVisit.occurredAt, typeLabel: t(locale, visitTypeLabel(nextVisit.type)), workflow: nextVisit.workflow } : null}
         unfinished={unfinished ? { id: unfinished.id, occurredAt: unfinished.occurredAt, typeLabel: t(locale, visitTypeLabel(unfinished.type)), workflow: unfinished.workflow } : null}
         tasks={patient.tasks}
-        extraction={parseStored(latest?.payload)}
-        treatment={treatment}
+        summary={patient.currentSummary}
+        diagnosis={patient.primaryDiagnosis}
       />
-
-      <PathwaySummary
-        locale={locale}
-        admittedAt={patient.admittedAt}
-        now={now}
-        visits={timed}
-        events={patient.events}
-        facts={pathwayFacts.map((fact) => ({ at: fact.visit.occurredAt, payload: fact.payload }))}
-      />
-
-      <SurfaceCard className="p-5">
-        <h2 className="text-sm font-semibold text-muted">{t(locale, "profileSummary")}</h2>
-        <p className="mt-3 whitespace-pre-wrap text-[15px] leading-7 text-ink">
-          {patient.currentSummary?.trim() || t(locale, "profileEmpty")}
-        </p>
-        {patient.primaryDiagnosis ? (
-          <p className="mt-3 text-sm text-muted">{patient.primaryDiagnosis}</p>
-        ) : null}
-      </SurfaceCard>
 
       <Suspense fallback={null}>
         <PatientDetailTabs locale={locale} patientId={patient.id} />
@@ -188,18 +145,99 @@ export default async function PatientDetailPage({
         )
       ) : null}
 
-      {tab === "timeline" ? (
+      {tab === "tasks" || filter === "tasks" ? (
+        <PatientTasks locale={locale} patientId={patient.id} tasks={patient.tasks} />
+      ) : null}
+
+      {tab === "timeline" && filter !== "tasks" ? (
         <PatientTimeline
           locale={locale}
           patientId={patient.id}
           visits={timed}
           events={patient.events}
-          tasks={patient.tasks}
-          filter={["visits", "treatment", "events", "tasks"].includes(filter) ? filter : "all"}
+          filter={["visits", "treatment", "events"].includes(filter) ? filter : "all"}
           page={Math.min(Math.max(Number(page) || 1, 1), 5)}
         />
       ) : null}
     </div>
+  );
+}
+
+function PatientTasks({
+  locale,
+  patientId,
+  tasks,
+}: {
+  locale: ReturnType<typeof resolveLocale>;
+  patientId: string;
+  tasks: Array<{
+    id: string;
+    title: string;
+    status: "TODO" | "WAITING" | "DONE";
+    priority: "NORMAL" | "IMPORTANT" | "URGENT";
+    dueDate: Date | null;
+  }>;
+}) {
+  const ordered = [...tasks.filter((task) => task.status !== "DONE"), ...tasks.filter((task) => task.status === "DONE")];
+
+  return (
+    <section className="flex flex-col gap-3">
+      {ordered.length === 0 ? <EmptyState title={t(locale, "tasksEmpty")} body={t(locale, "homeTasksHint")} /> : null}
+      {ordered.length > 0 ? (
+        <SurfaceCard>
+          {ordered.map((task, index) => {
+            const done = task.status === "DONE";
+            return (
+              <div key={task.id} id={`task-${task.id}`}>
+                {index > 0 ? <div className="border-t border-line/70" /> : null}
+                <div className={`flex items-center gap-3 px-4 py-3 ${done ? "opacity-60" : ""}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className={`truncate text-[15px] font-semibold ${done ? "text-faint line-through" : "text-ink"}`}>{task.title}</p>
+                    <p className={`truncate text-sm ${done ? "text-faint line-through" : "text-muted"}`}>
+                      {task.dueDate
+                        ? new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
+                            timeZone: "Asia/Jerusalem",
+                            day: "numeric",
+                            month: "short",
+                          }).format(task.dueDate)
+                        : t(locale, "taskOpen")}
+                      {task.priority !== "NORMAL" ? ` · ${t(locale, task.priority === "URGENT" ? "priorityUrgent" : "priorityImportant")}` : ""}
+                      {task.status === "WAITING" ? ` · ${t(locale, "taskWaiting")}` : ""}
+                    </p>
+                  </div>
+                  <form action={`/api/tasks/${task.id}/done`} method="post">
+                    <input type="hidden" name="next" value={`/patients/${patientId}?tab=tasks`} />
+                    <button
+                      className={`min-h-11 rounded-xl px-3 text-sm font-semibold ${done ? "bg-surface text-muted" : "bg-terra text-white"}`}
+                    >
+                      {t(locale, done ? "taskReopen" : "taskDone")}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            );
+          })}
+        </SurfaceCard>
+      ) : null}
+      <details className="rounded-2xl bg-terra-soft">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-center px-3 text-sm font-semibold text-terra [&::-webkit-details-marker]:hidden">
+          {t(locale, "addTask")}
+        </summary>
+        <form action={`/api/patients/${patientId}/tasks`} method="post" className="flex flex-col gap-2 px-3 pb-3">
+          <input type="hidden" name="next" value={`/patients/${patientId}?tab=tasks`} />
+          <input name="title" required maxLength={160} placeholder={t(locale, "eventTitle")} className="min-h-11 rounded-xl bg-field px-3 text-sm" />
+          <div className="grid grid-cols-2 gap-2">
+            <select name="priority" className="min-h-11 rounded-xl bg-field px-2 text-sm">
+              <option value="NORMAL">{t(locale, "priorityNormal")}</option>
+              <option value="IMPORTANT">{t(locale, "priorityImportant")}</option>
+              <option value="URGENT">{t(locale, "priorityUrgent")}</option>
+            </select>
+            <input name="dueDate" type="date" className="min-h-11 rounded-xl bg-field px-2 text-sm" />
+          </div>
+          <button className="min-h-11 rounded-xl bg-terra text-sm font-semibold text-white">{t(locale, "addTask")}</button>
+        </form>
+      </details>
+    </section>
   );
 }
 
@@ -213,15 +251,6 @@ function statusTone(status: "ACTIVE" | "INACTIVE" | "DISCHARGED") {
   if (status === "ACTIVE") return "bg-success-soft text-success";
   if (status === "DISCHARGED") return "bg-surface text-muted";
   return "bg-danger-soft text-danger";
-}
-
-function formatDay(date: Date, locale: ReturnType<typeof resolveLocale>) {
-  return new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
-    timeZone: "Asia/Jerusalem",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
 }
 
 function ageInYears(birthDate: Date, now = new Date()) {

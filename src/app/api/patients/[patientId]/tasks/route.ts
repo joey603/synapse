@@ -46,7 +46,7 @@ export async function POST(request: Request, context: { params: Promise<{ patien
 }
 
 function safeNext(value: FormDataEntryValue | null, patientId: string) {
-  const fallback = `/patients/${patientId}?tab=timeline&filter=tasks`;
+  const fallback = `/patients/${patientId}?tab=tasks`;
   if (typeof value !== "string" || !value.startsWith(`/patients/${patientId}`)) return fallback;
   if (value.includes("://") || value.startsWith("//")) return fallback;
   return value;

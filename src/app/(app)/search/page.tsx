@@ -116,7 +116,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         title={t(locale, "searchGroupTasks")}
         rows={tasks.map((task) => ({
           id: task.id,
-          href: `/patients/${task.patientId}?tab=timeline&filter=tasks#task-${task.id}`,
+          href: `/patients/${task.patientId}?tab=tasks#task-${task.id}`,
           title: task.title,
           meta: `${task.patient.firstName} ${task.patient.lastName}`,
         }))}

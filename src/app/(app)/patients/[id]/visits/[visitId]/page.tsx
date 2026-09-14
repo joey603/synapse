@@ -123,7 +123,7 @@ export default async function VisitPage({
           {!busy && !validated && visit.transcript ? (
             <form action={`/api/visits/${visit.id}/pipeline`} method="post" className="flex flex-col gap-3">
               <input type="hidden" name="mode" value="analyze" />
-              {status === "REVIEWED" || pipe === "confirm" ? (
+              {visit.report?.status === "REVIEWED" || pipe === "confirm" ? (
                 <label className="flex items-start gap-3 text-sm leading-6 text-ink">
                   <input type="checkbox" name="confirm" required className="mt-1 h-4 w-4 accent-accent" />
                   {t(locale, "confirmOverwrite")}
@@ -220,8 +220,8 @@ export default async function VisitPage({
           )}
         </>
       ) : null}
-      <details className="rounded-2xl bg-card ring-1 ring-line">
-        <summary className="min-h-12 cursor-pointer px-4 py-3 text-sm font-semibold text-muted">{t(locale, "addTask")}</summary>
+      <details className="rounded-2xl bg-terra-soft">
+        <summary className="min-h-12 cursor-pointer px-4 py-3 text-sm font-semibold text-terra">{t(locale, "addTask")}</summary>
         <form action={`/api/patients/${id}/tasks`} method="post" className="flex flex-col gap-2 px-4 pb-4">
           <input type="hidden" name="visitId" value={visit.id} />
           <input type="hidden" name="next" value={`/patients/${id}/visits/${visit.id}`} />
@@ -234,7 +234,7 @@ export default async function VisitPage({
             </select>
             <input name="dueDate" type="date" className="min-h-12 rounded-xl bg-field px-2 text-sm" />
           </div>
-          <button className="min-h-12 rounded-xl border border-line text-sm font-semibold text-ink">{t(locale, "addTask")}</button>
+          <button className="min-h-12 rounded-xl bg-terra text-sm font-semibold text-white">{t(locale, "addTask")}</button>
         </form>
       </details>
     </div>

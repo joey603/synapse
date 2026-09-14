@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-import { otherRiskUnassessed, pickNextAction, riskReadout, type RiskReadout } from "@/lib/clinical/cockpit";
-import type { StoredExtraction } from "@/lib/clinical/types";
+import { pickNextAction } from "@/lib/clinical/cockpit";
 import type { Locale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
 import type { WorkflowLabel } from "@/lib/visits/workflow-status";
@@ -17,24 +16,21 @@ export function PatientCockpit({
   locale,
   patientId,
   today,
-  lastVisit,
   nextVisit,
   unfinished,
   tasks,
-  extraction,
-  treatment,
+  summary,
+  diagnosis,
 }: {
   locale: Locale;
   patientId: string;
   today: string;
-  lastVisit: VisitRow | null;
   nextVisit: VisitRow | null;
   unfinished: VisitRow | null;
   tasks: Array<{ id: string; title: string; status: string; priority: string; dueDate: Date | null }>;
-  extraction: StoredExtraction | null;
-  treatment: { title: string; when: string | null } | null;
+  summary: string | null;
+  diagnosis: string | null;
 }) {
-  const risk = riskReadout(extraction);
   const action = pickNextAction({
     patientId,
     today,
@@ -59,24 +55,12 @@ export function PatientCockpit({
       >
         {t(locale, "newVisit")}
       </Link>
-      <div className={`rounded-2xl px-4 py-3 ${riskTone(risk)}`}>
-        <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{t(locale, "cockpitRisk")}</p>
-        <p className="mt-1 text-[15px] font-semibold leading-5">{t(locale, riskKey(risk))}</p>
-        {otherRiskUnassessed(extraction) ? (
-          <p className="mt-1 text-xs leading-5 opacity-80">{t(locale, "riskOthersMissing")}</p>
-        ) : null}
-      </div>
-
-      <dl className="grid grid-cols-2 gap-2">
-        <Fact label={t(locale, "cockpitLast")} value={lastVisit ? formatWhen(lastVisit.occurredAt, locale) : "—"} />
-        <Fact label={t(locale, "cockpitNext")} value={nextVisit ? formatWhen(nextVisit.occurredAt, locale) : "—"} />
-        <Fact label={t(locale, "cockpitTrend")} value={t(locale, "cockpitTrendUnknown")} wide />
-      </dl>
-      <div className="rounded-2xl bg-card px-3 py-3 ring-1 ring-line">
-        <p className="text-xs font-medium text-muted">{t(locale, "cockpitTreatment")}</p>
-        <p className="mt-1 text-sm font-semibold leading-5 text-ink">
-          {treatment ? (treatment.when ? `${treatment.title} · ${treatment.when}` : treatment.title) : t(locale, "cockpitTreatmentUnknown")}
+      <div className="rounded-2xl bg-card px-4 py-4 ring-1 ring-line">
+        <p className="text-sm font-semibold text-muted">{t(locale, "profileSummary")}</p>
+        <p className="mt-3 whitespace-pre-wrap text-[15px] leading-7 text-ink">
+          {summary?.trim() || t(locale, "profileEmpty")}
         </p>
+        {diagnosis?.trim() ? <p className="mt-3 text-sm text-muted">{diagnosis}</p> : null}
       </div>
       {action.kind === "new" ? null : (
         <Link
@@ -87,30 +71,44 @@ export function PatientCockpit({
           <span className="text-base font-semibold leading-6">{actionLabel}</span>
         </Link>
       )}
+      <FollowUpForms locale={locale} patientId={patientId} />
     </section>
   );
 }
 
-function Fact({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+function FollowUpForms({ locale, patientId }: { locale: Locale; patientId: string }) {
+  const kinds = [
+    ["TREATMENT", "kindTreatment"],
+    ["CLINICAL", "kindClinical"],
+    ["HOSPITALIZATION", "kindHospital"],
+    ["EXAM", "kindExam"],
+    ["CONTACT", "kindContact"],
+    ["OTHER", "kindOther"],
+  ] as const;
+
   return (
-    <div className={`min-w-0 rounded-2xl bg-card px-3 py-3 ring-1 ring-line ${wide ? "col-span-2" : ""}`}>
-      <dt className="text-xs font-medium text-muted">{label}</dt>
-      <dd className="mt-1 text-sm font-semibold leading-5 text-ink">{value}</dd>
-    </div>
+    <>
+      <details className="rounded-2xl bg-accent-soft">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-center px-3 text-sm font-semibold text-accent [&::-webkit-details-marker]:hidden">
+          {t(locale, "addEvent")}
+        </summary>
+        <form action={`/api/patients/${patientId}/events`} method="post" className="flex flex-col gap-2 px-3 pb-3">
+          <input name="title" required maxLength={160} placeholder={t(locale, "eventTitle")} className="min-h-11 rounded-xl bg-field px-3 text-sm" />
+          <div className="grid grid-cols-2 gap-2">
+            <select name="kind" className="min-h-11 rounded-xl bg-field px-2 text-sm">
+              {kinds.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {t(locale, label)}
+                </option>
+              ))}
+            </select>
+            <input name="occurredAt" type="date" required className="min-h-11 rounded-xl bg-field px-2 text-sm" />
+          </div>
+          <button className="min-h-11 rounded-xl bg-accent text-sm font-semibold text-white">{t(locale, "addEvent")}</button>
+        </form>
+      </details>
+    </>
   );
-}
-
-function riskKey(risk: RiskReadout): MessageKey {
-  if (risk === "present") return "riskPresent";
-  if (risk === "uncertain") return "riskUncertain";
-  if (risk === "denied") return "riskDenied";
-  return "riskMissing";
-}
-
-function riskTone(risk: RiskReadout) {
-  if (risk === "present") return "bg-danger-soft text-danger";
-  if (risk === "uncertain") return "bg-terra-soft text-ink";
-  return "bg-field text-ink";
 }
 
 function actionKey(code: "continue" | "transcribe" | "analyze" | "review"): MessageKey {

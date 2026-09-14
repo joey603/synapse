@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ClinicalEventKind, TaskPriority, TaskStatus, VisitType } from "@prisma/client";
+import type { ClinicalEventKind, VisitType } from "@prisma/client";
 
 import { visitHrefForStatus, type WorkflowLabel } from "@/lib/visits/workflow-status";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -23,21 +23,11 @@ type EventItem = {
   occurredAt: Date;
 };
 
-type TaskItem = {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  dueDate: Date | null;
-  createdAt: Date;
-};
-
 export function PatientTimeline({
   locale,
   patientId,
   visits,
   events,
-  tasks,
   filter,
   page,
 }: {
@@ -45,30 +35,25 @@ export function PatientTimeline({
   patientId: string;
   visits: VisitItem[];
   events: EventItem[];
-  tasks: TaskItem[];
   filter: string;
   page: number;
 }) {
-  const items = merge(visits, events, tasks, filter);
+  const items = merge(visits, events, filter);
   const shown = items.slice(0, page * PAGE);
   const more = items.length > shown.length;
   const base = `/patients/${patientId}?tab=timeline`;
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
-        {(["all", "visits", "treatment", "events", "tasks"] as const).map((id) => (
-          <Link
-            key={id}
-            href={`${base}&filter=${id}`}
-            className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${
-              filter === id ? "bg-accent text-white" : "bg-card text-muted ring-1 ring-line"
-            }`}
-          >
-            {t(locale, filterKey(id))}
+      {filter === "all" ? null : (
+        <p className="text-sm text-muted">
+          {t(locale, filterKey(filter))}
+          {" · "}
+          <Link href={base} className="font-semibold text-accent">
+            {t(locale, "tabTimeline")}
           </Link>
-        ))}
-      </div>
+        </p>
+      )}
 
       {shown.length === 0 ? <EmptyState title={t(locale, "timelineEmpty")} body={t(locale, "timelineHint")} /> : null}
 
@@ -103,9 +88,9 @@ export function PatientTimeline({
               <p className="text-xs text-muted">{formatWhen(item.at, locale)}</p>
             </div>
           ) : (
-            <div key={item.id} id={item.kind === "task" ? `task-${item.id}` : undefined} className="px-1 py-1">
+            <div key={item.id} className="px-1 py-1">
               <p className="text-xs text-faint">
-                {item.kind === "task" ? t(locale, "filterTasks") : t(locale, kindKey(item.eventKind))} · {formatWhen(item.at, locale)}
+                {t(locale, kindKey(item.eventKind))} · {formatWhen(item.at, locale)}
               </p>
               <p className="text-sm text-muted">{item.title}</p>
             </div>
@@ -118,50 +103,15 @@ export function PatientTimeline({
           {t(locale, "timelineMore")}
         </Link>
       ) : null}
-
-      <details className="rounded-2xl bg-card ring-1 ring-line">
-        <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium text-muted">{t(locale, "addEvent")}</summary>
-      <form action={`/api/patients/${patientId}/events`} method="post" className="flex flex-col gap-2 px-3 pb-3">
-        <input name="title" required maxLength={160} placeholder={t(locale, "eventTitle")} className="min-h-11 rounded-xl bg-field px-3 text-sm" />
-        <div className="grid grid-cols-2 gap-2">
-          <select name="kind" className="min-h-11 rounded-xl bg-field px-2 text-sm">
-            {(["TREATMENT", "CLINICAL", "HOSPITALIZATION", "EXAM", "CONTACT", "OTHER"] as const).map((kind) => (
-              <option key={kind} value={kind}>
-                {t(locale, kindKey(kind))}
-              </option>
-            ))}
-          </select>
-          <input name="occurredAt" type="date" required className="min-h-11 rounded-xl bg-field px-2 text-sm" />
-        </div>
-        <button className="min-h-11 rounded-xl border border-line text-sm font-semibold text-ink">{t(locale, "addEvent")}</button>
-      </form>
-      </details>
-
-      <details className="rounded-2xl bg-card ring-1 ring-line">
-        <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium text-muted">{t(locale, "addTask")}</summary>
-      <form action={`/api/patients/${patientId}/tasks`} method="post" className="flex flex-col gap-2 px-3 pb-3">
-        <input name="title" required maxLength={160} placeholder={t(locale, "eventTitle")} className="min-h-11 rounded-xl bg-field px-3 text-sm" />
-        <div className="grid grid-cols-2 gap-2">
-          <select name="priority" className="min-h-11 rounded-xl bg-field px-2 text-sm">
-            <option value="NORMAL">{t(locale, "priorityNormal")}</option>
-            <option value="IMPORTANT">{t(locale, "priorityImportant")}</option>
-            <option value="URGENT">{t(locale, "priorityUrgent")}</option>
-          </select>
-          <input name="dueDate" type="date" className="min-h-11 rounded-xl bg-field px-2 text-sm" />
-        </div>
-        <button className="min-h-11 rounded-xl border border-line text-sm font-semibold text-ink">{t(locale, "addTask")}</button>
-      </form>
-      </details>
     </section>
   );
 }
 
 type Row =
   | { kind: "visit"; id: string; at: Date; type: VisitType; workflow: WorkflowLabel }
-  | { kind: "event"; id: string; at: Date; title: string; eventKind: ClinicalEventKind }
-  | { kind: "task"; id: string; at: Date; title: string };
+  | { kind: "event"; id: string; at: Date; title: string; eventKind: ClinicalEventKind };
 
-function merge(visits: VisitItem[], events: EventItem[], tasks: TaskItem[], filter: string): Row[] {
+function merge(visits: VisitItem[], events: EventItem[], filter: string): Row[] {
   const rows: Row[] = [];
   if (filter === "all" || filter === "visits") {
     rows.push(...visits.map((visit) => ({ kind: "visit" as const, id: visit.id, at: visit.occurredAt, type: visit.type, workflow: visit.workflow })));
@@ -173,20 +123,10 @@ function merge(visits: VisitItem[], events: EventItem[], tasks: TaskItem[], filt
         .map((event) => ({ kind: "event" as const, id: event.id, at: event.occurredAt, title: event.title, eventKind: event.kind })),
     );
   }
-  if (filter === "all" || filter === "tasks") {
-    rows.push(
-      ...tasks.map((task) => ({
-        kind: "task" as const,
-        id: task.id,
-        at: task.dueDate ?? task.createdAt,
-        title: task.title,
-      })),
-    );
-  }
   return rows.sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 
-function filterKey(id: "all" | "visits" | "treatment" | "events" | "tasks"): MessageKey {
+function filterKey(id: string): MessageKey {
   if (id === "visits") return "filterVisits";
   if (id === "treatment") return "filterTreatment";
   if (id === "events") return "filterEvents";
