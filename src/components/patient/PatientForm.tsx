@@ -29,7 +29,12 @@ export function PatientForm({
   const previewName = [values?.firstName, values?.lastName].filter(Boolean).join(" ");
 
   return (
-    <form action={action} method="post" encType="multipart/form-data" className="flex flex-col gap-4">
+    <form
+      action={action}
+      method="post"
+      encType="multipart/form-data"
+      className="flex flex-col gap-4 pb-8"
+    >
       {error ? (
         <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm leading-6 text-danger" role="alert">
           {t(
@@ -99,19 +104,21 @@ export function PatientForm({
         <Area locale={locale} name="currentSummary" label="fieldSummary" defaultValue={values?.currentSummary} rows={6} />
       </SurfaceCard>
 
-      <div className="flex gap-3">
-        <Link
-          href={cancelHref}
-          className="flex min-h-12 flex-1 items-center justify-center rounded-2xl bg-card text-sm font-semibold text-muted shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
-        >
-          {t(locale, "cancel")}
-        </Link>
-        <button
-          type="submit"
-          className="min-h-12 flex-[1.4] rounded-2xl bg-accent text-sm font-semibold text-white"
-        >
-          {t(locale, "savePatient")}
-        </button>
+      <div className="fixed inset-x-0 bottom-0 z-20 bg-surface">
+        <div className="mx-auto flex max-w-lg gap-3 border-t border-line/70 px-5 pt-2 pb-[calc(4.65rem+env(safe-area-inset-bottom))]">
+          <Link
+            href={cancelHref}
+            className="flex min-h-12 flex-1 items-center justify-center rounded-2xl bg-card text-sm font-semibold text-muted shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
+          >
+            {t(locale, "cancel")}
+          </Link>
+          <button
+            type="submit"
+            className="min-h-12 flex-[1.4] rounded-2xl bg-accent text-sm font-semibold text-white"
+          >
+            {t(locale, "savePatient")}
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -166,7 +173,7 @@ function Area({
         name={name}
         rows={rows}
         defaultValue={defaultValue ?? ""}
-        className={`${controlClass} resize-y leading-6`}
+        className={`${controlClass} max-h-40 resize-y overflow-y-auto leading-6`}
       />
     </label>
   );

@@ -36,15 +36,15 @@ export function PatientPhotoField({
           <img
             src={shown}
             alt=""
-            className="h-16 w-16 shrink-0 rounded-full object-cover ring-1 ring-line"
+            className="h-24 w-24 shrink-0 rounded-full object-cover ring-1 ring-line"
           />
         ) : (
-          <Avatar name={name || "?"} size="lg" />
+          <Avatar name={name || "?"} size="xl" />
         )}
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <label
             htmlFor={inputId}
-            className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl bg-accent-soft px-3 text-sm font-semibold text-accent"
+            className="inline-flex min-h-9 w-fit cursor-pointer items-center justify-center rounded-xl bg-accent-soft px-3 text-xs font-semibold text-accent"
           >
             {t(locale, "photoChoose")}
           </label>
