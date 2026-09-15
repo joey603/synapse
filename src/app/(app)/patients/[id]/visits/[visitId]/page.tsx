@@ -10,7 +10,6 @@ import { PipelineProgress } from "@/components/visits/PipelineProgress";
 import { TaskPanel } from "@/components/tasks/TaskPanel";
 import { ReportEditor } from "@/components/visits/ReportEditor";
 import { TranscriptEditor } from "@/components/visits/TranscriptEditor";
-import { BackChevron } from "@/components/ui/BackChevron";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { compareMedications } from "@/lib/clinical/medication-compare";
@@ -86,14 +85,12 @@ export default async function VisitPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <Link href={`/patients/${id}?tab=timeline`} className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted">
-        <BackChevron locale={locale} />
-        {visit.patient.firstName} {visit.patient.lastName}
-      </Link>
       <header className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, visitTypeLabel(visit.type))}</h1>
-          <p className="mt-1 text-sm text-muted">{t(locale, "visitNext")}</p>
+          <p className="mt-1 text-sm text-muted">
+            {visit.patient.firstName} {visit.patient.lastName} · {t(locale, "visitNext")}
+          </p>
         </div>
         <span className="shrink-0 rounded-full bg-surface px-3 py-1 text-xs font-semibold text-muted">
           {statusLabel}

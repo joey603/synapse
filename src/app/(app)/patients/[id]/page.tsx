@@ -7,7 +7,6 @@ import { TaskPanel } from "@/components/tasks/TaskPanel";
 import { PatientDetailTabs } from "@/components/patient/PatientDetailTabs";
 import { PatientTimeline } from "@/components/patient/PatientTimeline";
 import { Avatar } from "@/components/ui/Avatar";
-import { BackChevron } from "@/components/ui/BackChevron";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { jerusalemDay } from "@/lib/clinical/cockpit";
@@ -70,14 +69,6 @@ export default async function PatientDetailPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <Link
-        href="/patients"
-        className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted"
-      >
-        <BackChevron locale={locale} />
-        {t(locale, "backToPatients")}
-      </Link>
-
       <SurfaceCard className="p-5">
         <div className="flex items-start gap-4">
           <Avatar name={fullName} size="lg" />

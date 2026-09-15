@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 
 import { TaskInbox } from "@/components/tasks/TaskInbox";
-import { BackChevron } from "@/components/ui/BackChevron";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
@@ -33,13 +32,6 @@ export default async function RecentVisitsPage({ searchParams }: { searchParams:
 
   return (
     <div className="flex flex-col gap-5">
-      <Link
-        href="/"
-        className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted"
-      >
-        <BackChevron locale={locale} />
-        {t(locale, "home")}
-      </Link>
       <header>
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "recentTitle")}</h1>
         <p className="mt-1 text-sm text-muted">{t(locale, "rowRecentHint")}</p>

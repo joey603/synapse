@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
-import { BackChevron } from "@/components/ui/BackChevron";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
@@ -21,13 +20,6 @@ export default async function TransmissionsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <Link
-        href="/"
-        className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted"
-      >
-        <BackChevron locale={locale} />
-        {t(locale, "home")}
-      </Link>
       <header>
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "transmissionsTitle")}</h1>
         <p className="mt-1 text-sm text-muted">{t(locale, "rowPendingHint")}</p>

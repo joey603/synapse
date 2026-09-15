@@ -28,15 +28,17 @@ export function PendingButton({
   idle,
   pending,
   className,
+  label,
 }: {
-  idle: string;
-  pending: string;
+  idle: ReactNode;
+  pending: ReactNode;
   className?: string;
+  label?: string;
 }) {
   const isPending = useContext(PendingContext);
 
   return (
-    <button type="submit" disabled={isPending} className={className}>
+    <button type="submit" disabled={isPending} className={className} aria-label={label}>
       {isPending ? pending : idle}
     </button>
   );

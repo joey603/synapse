@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 
 import { NearbyView } from "@/components/nearby/NearbyView";
-import { BackChevron } from "@/components/ui/BackChevron";
 import { db } from "@/lib/db";
 import { placeKey } from "@/lib/geo/place";
 import { resolveLocale } from "@/lib/i18n/locale";
@@ -28,10 +26,6 @@ export default async function NearbyPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <Link href="/" className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-muted">
-        <BackChevron locale={locale} />
-        {t(locale, "home")}
-      </Link>
       <header>
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "nearbyTitle")}</h1>
         <p className="mt-1 text-sm text-muted">{t(locale, "nearbyHint")}</p>

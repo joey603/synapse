@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
@@ -23,12 +22,6 @@ export default async function EditPatientPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <Link
-        href={`/patients/${id}`}
-        className="inline-flex min-h-10 items-center text-sm font-medium text-muted"
-      >
-        {t(locale, "backToPatients")}
-      </Link>
       <header>
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "editPatient")}</h1>
         <p className="mt-1 text-sm text-muted">
