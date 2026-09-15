@@ -1,11 +1,15 @@
 import Link from "next/link";
 
+import { PatientPhotoField } from "@/components/patient/PatientPhotoField";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import type { Locale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
 import { toInputDate, type PatientInput } from "@/lib/patients/parse";
 
-type Values = Partial<PatientInput>;
+type Values = Partial<PatientInput> & {
+  firstName?: string;
+  lastName?: string;
+};
 
 export function PatientForm({
   locale,
@@ -13,23 +17,37 @@ export function PatientForm({
   values,
   error,
   cancelHref,
+  photoUrl,
 }: {
   locale: Locale;
   action: string;
   values?: Values;
-  error?: "invalid" | "save" | null;
+  error?: "invalid" | "save" | "type" | "size" | null;
   cancelHref: string;
+  photoUrl?: string | null;
 }) {
+  const previewName = [values?.firstName, values?.lastName].filter(Boolean).join(" ");
+
   return (
-    <form action={action} method="post" className="flex flex-col gap-4">
+    <form action={action} method="post" encType="multipart/form-data" className="flex flex-col gap-4">
       {error ? (
         <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm leading-6 text-danger" role="alert">
-          {t(locale, error === "save" ? "formSaveError" : "formInvalid")}
+          {t(
+            locale,
+            error === "save"
+              ? "formSaveError"
+              : error === "type"
+                ? "photoTypeError"
+                : error === "size"
+                  ? "photoSizeError"
+                  : "formInvalid",
+          )}
         </p>
       ) : null}
 
       <SurfaceCard className="flex flex-col gap-4 p-4">
         <h2 className="text-sm font-semibold text-muted">{t(locale, "identityTitle")}</h2>
+        <PatientPhotoField locale={locale} name={previewName} photoUrl={photoUrl} />
         <Field locale={locale} name="firstName" label="fieldFirstName" required defaultValue={values?.firstName} />
         <Field locale={locale} name="lastName" label="fieldLastName" required defaultValue={values?.lastName} />
         <Field locale={locale} name="birthDate" label="fieldBirthDate" type="date" defaultValue={toInputDate(values?.birthDate)} />

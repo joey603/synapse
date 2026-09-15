@@ -103,17 +103,19 @@ export function VisitForm({
           {t(locale, "visitNotes")}
           <textarea
             name="notes"
-            rows={4}
+            rows={3}
             defaultValue={notes ?? ""}
             placeholder={t(locale, "visitNotesHint")}
-            className="resize-y rounded-2xl border border-line/80 bg-field px-4 py-3 text-base font-normal leading-6 outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
+            className="h-24 max-h-24 resize-none overflow-y-auto rounded-2xl border border-line/80 bg-field px-4 py-3 text-base font-normal leading-6 outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
           />
         </label>
       </SurfaceCard>
 
-      <button type="submit" className="min-h-12 rounded-2xl bg-accent text-sm font-semibold text-white">
-        {submitLabel}
-      </button>
+      <div className="sticky bottom-0 z-10 -mx-5 bg-surface px-5 pb-1 pt-2">
+        <button type="submit" className="min-h-12 w-full rounded-2xl bg-accent text-sm font-semibold text-white">
+          {submitLabel}
+        </button>
+      </div>
     </form>
   );
 }

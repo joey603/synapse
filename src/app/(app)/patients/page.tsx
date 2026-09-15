@@ -10,6 +10,7 @@ import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { db } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
+import { patientPhotoUrl } from "@/lib/patients/photo";
 import type { PatientStatus } from "@prisma/client";
 
 export default async function PatientsPage({
@@ -93,6 +94,7 @@ export default async function PatientsPage({
                     meta={meta || badge}
                     badge={meta ? badge : undefined}
                     badgeTone={patient.status === "ACTIVE" ? "success" : patient.status === "DISCHARGED" ? "muted" : "danger"}
+                    photoUrl={patientPhotoUrl(patient.id, patient.photoKey, patient.updatedAt)}
                   />
                 </div>
               );

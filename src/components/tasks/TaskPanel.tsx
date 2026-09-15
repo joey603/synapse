@@ -28,6 +28,25 @@ export function TaskPanel({
 
   return (
     <section className="flex flex-col gap-3">
+      <details className="rounded-2xl bg-terra-soft">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-center px-3 text-sm font-semibold text-terra [&::-webkit-details-marker]:hidden">
+          {t(locale, "addTask")}
+        </summary>
+        <form action={`/api/patients/${patientId}/tasks`} method="post" className="flex flex-col gap-2 px-3 pb-3">
+          {visitId ? <input type="hidden" name="visitId" value={visitId} /> : null}
+          <input type="hidden" name="next" value={next} />
+          <input name="title" required maxLength={160} placeholder={t(locale, "eventTitle")} className="min-h-11 rounded-xl bg-field px-3 text-sm" />
+          <div className="grid grid-cols-2 gap-2">
+            <select name="priority" className="min-h-11 rounded-xl bg-field px-2 text-sm">
+              <option value="NORMAL">{t(locale, "priorityNormal")}</option>
+              <option value="IMPORTANT">{t(locale, "priorityImportant")}</option>
+              <option value="URGENT">{t(locale, "priorityUrgent")}</option>
+            </select>
+            <input name="dueDate" type="date" className="min-h-11 rounded-xl bg-field px-2 text-sm" />
+          </div>
+          <button className="min-h-11 rounded-xl bg-terra text-sm font-semibold text-white">{t(locale, "addTask")}</button>
+        </form>
+      </details>
       {ordered.length === 0 ? <EmptyState title={t(locale, "tasksEmpty")} body={t(locale, "homeTasksHint")} /> : null}
       {ordered.length > 0 ? (
         <SurfaceCard>
@@ -65,25 +84,6 @@ export function TaskPanel({
           })}
         </SurfaceCard>
       ) : null}
-      <details className="rounded-2xl bg-terra-soft">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-center px-3 text-sm font-semibold text-terra [&::-webkit-details-marker]:hidden">
-          {t(locale, "addTask")}
-        </summary>
-        <form action={`/api/patients/${patientId}/tasks`} method="post" className="flex flex-col gap-2 px-3 pb-3">
-          {visitId ? <input type="hidden" name="visitId" value={visitId} /> : null}
-          <input type="hidden" name="next" value={next} />
-          <input name="title" required maxLength={160} placeholder={t(locale, "eventTitle")} className="min-h-11 rounded-xl bg-field px-3 text-sm" />
-          <div className="grid grid-cols-2 gap-2">
-            <select name="priority" className="min-h-11 rounded-xl bg-field px-2 text-sm">
-              <option value="NORMAL">{t(locale, "priorityNormal")}</option>
-              <option value="IMPORTANT">{t(locale, "priorityImportant")}</option>
-              <option value="URGENT">{t(locale, "priorityUrgent")}</option>
-            </select>
-            <input name="dueDate" type="date" className="min-h-11 rounded-xl bg-field px-2 text-sm" />
-          </div>
-          <button className="min-h-11 rounded-xl bg-terra text-sm font-semibold text-white">{t(locale, "addTask")}</button>
-        </form>
-      </details>
     </section>
   );
 }

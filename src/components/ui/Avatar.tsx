@@ -1,8 +1,10 @@
 export function Avatar({
   name,
+  photoUrl,
   size = "md",
 }: {
   name: string;
+  photoUrl?: string | null;
   size?: "sm" | "md" | "lg";
 }) {
   const initials = name
@@ -17,6 +19,18 @@ export function Avatar({
     md: "h-12 w-12 text-base",
     lg: "h-16 w-16 text-lg",
   };
+
+  if (photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoUrl}
+        alt=""
+        className={`shrink-0 rounded-full object-cover ${sizes[size]}`}
+        aria-hidden="true"
+      />
+    );
+  }
 
   return (
     <div

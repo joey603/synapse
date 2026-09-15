@@ -5,6 +5,7 @@ import { PatientForm } from "@/components/patient/PatientForm";
 import { db } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
+import { patientPhotoUrl } from "@/lib/patients/photo";
 
 export default async function EditPatientPage({
   params,
@@ -20,6 +21,17 @@ export default async function EditPatientPage({
   const patient = await db.patient.findUnique({ where: { id } });
   if (!patient) notFound();
 
+  const formError =
+    error === "save"
+      ? "save"
+      : error === "invalid"
+        ? "invalid"
+        : error === "type"
+          ? "type"
+          : error === "size"
+            ? "size"
+            : null;
+
   return (
     <div className="flex flex-col gap-5">
       <header>
@@ -33,7 +45,8 @@ export default async function EditPatientPage({
         action={`/api/patients/${id}`}
         cancelHref={`/patients/${id}`}
         values={patient}
-        error={error === "save" ? "save" : error === "invalid" ? "invalid" : null}
+        photoUrl={patientPhotoUrl(patient.id, patient.photoKey, patient.updatedAt)}
+        error={formError}
       />
     </div>
   );

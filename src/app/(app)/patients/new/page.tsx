@@ -13,6 +13,17 @@ export default async function NewPatientPage({
   const locale = resolveLocale(store.get("synapse_locale")?.value);
   const { error } = await searchParams;
 
+  const formError =
+    error === "save"
+      ? "save"
+      : error === "invalid"
+        ? "invalid"
+        : error === "type"
+          ? "type"
+          : error === "size"
+            ? "size"
+            : null;
+
   return (
     <div className="flex flex-col gap-5">
       <header>
@@ -23,7 +34,7 @@ export default async function NewPatientPage({
         locale={locale}
         action="/api/patients"
         cancelHref="/patients"
-        error={error === "save" ? "save" : error === "invalid" ? "invalid" : null}
+        error={formError}
       />
     </div>
   );

@@ -14,6 +14,7 @@ import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
+import { patientPhotoUrl } from "@/lib/patients/photo";
 import { hasWeeklyHadTargets, weekStartsOnFor } from "@/lib/visits/had-week";
 import { loadWeeklyHadForPatients } from "@/lib/visits/had-week-load";
 import { workflowStatus } from "@/lib/visits/workflow-status";
@@ -89,13 +90,19 @@ export default async function PatientDetailPage({
     <div className="flex flex-col gap-5">
       <SurfaceCard className="p-5">
         <div className="flex items-start gap-4">
-          <Avatar name={fullName} size="lg" />
+          <Avatar
+            name={fullName}
+            size="lg"
+            photoUrl={patientPhotoUrl(patient.id, patient.photoKey, patient.updatedAt)}
+          />
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold leading-tight text-ink">{fullName}</h1>
+            <div className="flex min-w-0 items-center gap-3">
+              <h1 className="min-w-0 truncate text-xl font-semibold leading-tight text-ink">{fullName}</h1>
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(patient.status)}`}>
+                {statusLabel}
+              </span>
+            </div>
             {meta ? <p className="mt-1 text-sm text-muted">{meta}</p> : null}
-            <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(patient.status)}`}>
-              {statusLabel}
-            </span>
           </div>
           <Link
             href={`/patients/${patient.id}/edit`}

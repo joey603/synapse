@@ -34,6 +34,7 @@ export function SegmentedControl({
           <Link
             key={segment.id}
             href={href}
+            replace
             scroll={scroll}
             className={`flex min-h-10 flex-1 items-center justify-center rounded-xl px-1.5 text-center text-sm font-semibold leading-4 transition-colors ${
               active ? "bg-card text-ink shadow-[0_2px_8px_rgba(27,36,48,0.06)]" : "text-muted"

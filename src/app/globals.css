@@ -21,11 +21,15 @@
 }
 
 html {
+  height: 100%;
   background: var(--color-surface);
   color-scheme: light;
+  overflow: hidden;
 }
 
 body {
+  height: 100%;
+  overflow: hidden;
   background: var(--color-surface);
   color: var(--color-ink);
   font-family: var(--font-sans);

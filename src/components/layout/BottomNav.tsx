@@ -186,19 +186,22 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
+const NAV_ITEM =
+  "flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium";
+
 function BackButton({ label, fallback }: { label: string; fallback: string }) {
   const router = useRouter();
   return (
     <button
       type="button"
       onClick={() => {
-        if (typeof window !== "undefined" && window.history.length > 1) {
+        if (window.history.length > 1) {
           router.back();
           return;
         }
         router.push(fallback);
       }}
-      className="flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium text-faint"
+      className={`${NAV_ITEM} text-faint`}
     >
       <BackIcon />
       <span className="w-full truncate text-center leading-3">{label}</span>
@@ -221,10 +224,7 @@ function NavLink({
 }) {
   const tone = accent || active ? "text-accent" : "text-faint";
   return (
-    <Link
-      href={href}
-      className={`flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium ${tone}`}
-    >
+    <Link href={href} className={`${NAV_ITEM} ${tone}`}>
       <Icon />
       <span className="w-full truncate text-center leading-3">{label}</span>
     </Link>
@@ -244,11 +244,9 @@ function NavAction({
   disabled: boolean;
   external?: boolean;
 }) {
-  const className =
-    "flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium";
   if (disabled || !href) {
     return (
-      <span className={`${className} text-faint/40`}>
+      <span className={`${NAV_ITEM} text-faint/40`}>
         <Icon />
         <span className="w-full truncate text-center leading-3">{label}</span>
       </span>
@@ -259,7 +257,7 @@ function NavAction({
     <a
       href={href}
       rel={external ? "noreferrer" : undefined}
-      className={`${className} text-faint active:text-accent`}
+      className={`${NAV_ITEM} text-faint active:text-accent`}
     >
       <Icon />
       <span className="w-full truncate text-center leading-3">{label}</span>

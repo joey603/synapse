@@ -121,6 +121,8 @@ model Patient {
   latitude              Float?
   longitude             Float?
   geoKey                String?
+  photoKey              String?
+  photoMime             String?
   contactName           String?
   contactPhone          String?
   insurer               String?

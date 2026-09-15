@@ -38,7 +38,9 @@ export function AppShell({
           </div>
         </div>
       </div>
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-3">{children}</main>
+      <main className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-3 [-webkit-overflow-scrolling:touch]">
+        {children}
+      </main>
       <BottomNav locale={locale} />
     </div>
   );

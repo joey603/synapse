@@ -5,6 +5,7 @@ import { appUrl, getSession, isSameOrigin } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { parsePatientForm } from "@/lib/patients/parse";
+import { deletePatientPhoto, resolvePatientPhoto } from "@/lib/patients/photo";
 
 export const runtime = "nodejs";
 
@@ -35,7 +36,8 @@ async function updatePatient(
     return NextResponse.redirect(appUrl(request, "/login"), 303);
   }
 
-  const input = parsePatientForm(await request.formData());
+  const form = await request.formData();
+  const input = parsePatientForm(form);
   if (!input) {
     return NextResponse.redirect(appUrl(request, `${back}?error=invalid`), 303);
   }
@@ -43,16 +45,34 @@ async function updatePatient(
   try {
     const existing = await db.patient.findUnique({
       where: { id: patientId },
-      select: { id: true, address: true, city: true },
+      select: { id: true, address: true, city: true, photoKey: true },
     });
     if (!existing) {
       return NextResponse.redirect(appUrl(request, "/patients"), 303);
     }
 
+    const photo = await resolvePatientPhoto(form, existing.photoKey);
+    if (photo.kind === "error") {
+      return NextResponse.redirect(appUrl(request, `${back}?error=${photo.code}`), 303);
+    }
+
     const placeChanged = existing.address !== input.address || existing.city !== input.city;
+    const photoData =
+      photo.kind === "set"
+        ? { photoKey: photo.key, photoMime: photo.mime }
+        : photo.kind === "clear"
+          ? { photoKey: null, photoMime: null }
+          : {};
+
+    if (photo.kind === "clear" && existing.photoKey) {
+      await deletePatientPhoto(existing.photoKey);
+    }
+
     await db.patient.update({
       where: { id: patientId },
-      data: placeChanged ? { ...input, latitude: null, longitude: null, geoKey: null } : input,
+      data: placeChanged
+        ? { ...input, ...photoData, latitude: null, longitude: null, geoKey: null }
+        : { ...input, ...photoData },
     });
     await audit({
       actorId: session.user.id,
