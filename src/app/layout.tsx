@@ -21,13 +21,20 @@ export const metadata: Metadata = {
     title: "Synapse",
     statusBarStyle: "default",
   },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f7f4ef",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f4ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#1e4d6b" },
+  ],
 };
 
 export default async function RootLayout({
