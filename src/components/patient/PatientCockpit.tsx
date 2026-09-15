@@ -1,8 +1,10 @@
 import Link from "next/link";
 
+import { WeeklyHadCard } from "@/components/visits/WeeklyHadProgress";
 import { pickNextAction } from "@/lib/clinical/cockpit";
 import type { Locale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
+import type { WeeklyHadProgress } from "@/lib/visits/had-week";
 import { visitHrefForStatus, type WorkflowLabel } from "@/lib/visits/workflow-status";
 
 type VisitRow = {
@@ -21,6 +23,7 @@ export function PatientCockpit({
   tasks,
   summary,
   diagnosis,
+  weekProgress,
 }: {
   locale: Locale;
   patientId: string;
@@ -30,6 +33,7 @@ export function PatientCockpit({
   tasks: Array<{ id: string; title: string; status: string; priority: string; dueDate: Date | null }>;
   summary: string | null;
   diagnosis: string | null;
+  weekProgress?: WeeklyHadProgress | null;
 }) {
   const action = pickNextAction({
     patientId,
@@ -77,6 +81,7 @@ export function PatientCockpit({
           {t(locale, "newVisit")}
         </Link>
       )}
+      <WeeklyHadCard locale={locale} progress={weekProgress} />
       <div className="rounded-2xl bg-card px-4 py-4 ring-1 ring-line">
         <p className="text-sm font-semibold text-muted">{t(locale, "profileSummary")}</p>
         <p className="mt-3 whitespace-pre-wrap text-[15px] leading-7 text-ink">

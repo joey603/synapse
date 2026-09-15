@@ -14,6 +14,8 @@ import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
+import { hasWeeklyHadTargets, weekStartsOnFor } from "@/lib/visits/had-week";
+import { loadWeeklyHadForPatients } from "@/lib/visits/had-week-load";
 import { workflowStatus } from "@/lib/visits/workflow-status";
 import { notFound } from "next/navigation";
 
@@ -66,6 +68,22 @@ export default async function PatientDetailPage({
   const nextVisit = [...timed].reverse().find((visit) => visit.occurredAt.getTime() > now.getTime()) ?? null;
   const unfinished = timed.find((visit) => visit.occurredAt.getTime() <= now.getTime() && visit.workflow !== "VALIDATED") ?? null;
   const identity = identityRows(locale, patient);
+  const weekProgress = hasWeeklyHadTargets(patient)
+    ? (
+        await loadWeeklyHadForPatients(
+          db,
+          [
+            {
+              id: patient.id,
+              weeklyInPersonVisits: patient.weeklyInPersonVisits,
+              weeklyVirtualVisits: patient.weeklyVirtualVisits,
+            },
+          ],
+          now,
+          weekStartsOnFor(locale),
+        )
+      ).get(patient.id) ?? null
+    : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -97,6 +115,7 @@ export default async function PatientDetailPage({
         tasks={patient.tasks}
         summary={patient.currentSummary}
         diagnosis={patient.primaryDiagnosis}
+        weekProgress={weekProgress}
       />
 
       <Suspense fallback={null}>
@@ -194,6 +213,11 @@ function identityRows(
     referringPsychiatrist: string | null;
     referringNurse: string | null;
     admittedAt: Date | null;
+    accessInstructions: string | null;
+    weeklyInPersonVisits: number | null;
+    weeklyVirtualVisits: number | null;
+    plannedDischargeDate: Date | null;
+    operationalNote: string | null;
     primaryDiagnosis: string | null;
     secondaryDiagnoses: string | null;
     psychHistory: string | null;
@@ -205,24 +229,35 @@ function identityRows(
     protectiveFactors: string | null;
   },
 ) {
-  const date = patient.admittedAt
-    ? new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
-        timeZone: "UTC",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }).format(patient.admittedAt)
-    : null;
+  const dateFmt = new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const date = patient.admittedAt ? dateFmt.format(patient.admittedAt) : null;
+  const discharge = patient.plannedDischargeDate ? dateFmt.format(patient.plannedDischargeDate) : null;
 
   const rows: Array<[string, string | null]> = [
     [t(locale, "fieldPhone"), patient.phone],
     [t(locale, "fieldAddress"), patient.address],
+    [t(locale, "fieldAccessInstructions"), patient.accessInstructions],
     [t(locale, "fieldContactName"), patient.contactName],
     [t(locale, "fieldContactPhone"), patient.contactPhone],
     [t(locale, "fieldInsurer"), patient.insurer],
     [t(locale, "fieldPsychiatrist"), patient.referringPsychiatrist],
     [t(locale, "fieldNurse"), patient.referringNurse],
     [t(locale, "fieldAdmittedAt"), date],
+    [
+      t(locale, "fieldWeeklyInPerson"),
+      patient.weeklyInPersonVisits != null ? String(patient.weeklyInPersonVisits) : null,
+    ],
+    [
+      t(locale, "fieldWeeklyVirtual"),
+      patient.weeklyVirtualVisits != null ? String(patient.weeklyVirtualVisits) : null,
+    ],
+    [t(locale, "fieldPlannedDischarge"), discharge],
+    [t(locale, "fieldOperationalNote"), patient.operationalNote],
     [t(locale, "fieldDiagnosis"), patient.primaryDiagnosis],
     [t(locale, "fieldSecondary"), patient.secondaryDiagnoses],
     [t(locale, "fieldPsychHistory"), patient.psychHistory],

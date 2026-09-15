@@ -68,6 +68,42 @@ export function jerusalemDayBounds(now = new Date()) {
   return bounds;
 }
 
+/** Day of week in Asia/Jerusalem: 0 = Sunday … 6 = Saturday. */
+export function jerusalemWeekday(date: Date) {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE,
+    weekday: "short",
+  }).format(date);
+  const map: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  return map[weekday] ?? 0;
+}
+
+/**
+ * Inclusive start / exclusive end of the current week in Asia/Jerusalem.
+ * Default weekStartsOn = 0 (Sunday), aligned with the Hebrew agenda.
+ */
+export function jerusalemWeekBounds(now = new Date(), weekStartsOn: 0 | 1 = 0) {
+  const key = jerusalemDateKey(now);
+  const weekday = jerusalemWeekday(now);
+  const offset = weekStartsOn === 0 ? weekday : (weekday + 6) % 7;
+  const startKey = shiftJerusalemDay(key, -offset);
+  const endKey = startKey ? shiftJerusalemDay(startKey, 7) : null;
+  const start = startKey ? parseJerusalemInput(`${startKey}T00:00`) : null;
+  const end = endKey ? parseJerusalemInput(`${endKey}T00:00`) : null;
+  if (!start || !end || !startKey || !endKey) {
+    return { start: now, end: now, startKey: key, endKeyExclusive: key };
+  }
+  return { start, end, startKey, endKeyExclusive: endKey };
+}
+
 function jerusalemOffsetMs(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: TIME_ZONE,

@@ -178,7 +178,7 @@ function Shell({ children }: { children: ReactNode }) {
     <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       <div
         dir="ltr"
-        className="mx-auto flex max-w-lg rounded-3xl border border-line/80 bg-card shadow-[0_8px_24px_rgba(27,36,48,0.08)]"
+        className="mx-auto flex max-w-lg overflow-hidden rounded-3xl border border-line/80 bg-card shadow-[0_8px_24px_rgba(27,36,48,0.08)]"
       >
         {children}
       </div>
@@ -198,10 +198,10 @@ function BackButton({ label, fallback }: { label: string; fallback: string }) {
         }
         router.push(fallback);
       }}
-      className="flex min-h-[3.75rem] w-[4.75rem] shrink-0 flex-col items-center justify-center gap-1 text-[11px] font-medium text-faint"
+      className="flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium text-faint"
     >
       <BackIcon />
-      <span className="max-w-[4.5rem] truncate text-center leading-3">{label}</span>
+      <span className="w-full truncate text-center leading-3">{label}</span>
     </button>
   );
 }
@@ -223,10 +223,10 @@ function NavLink({
   return (
     <Link
       href={href}
-      className={`flex min-h-[3.75rem] flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium ${tone}`}
+      className={`flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium ${tone}`}
     >
       <Icon />
-      <span className="max-w-[4.5rem] truncate text-center leading-3">{label}</span>
+      <span className="w-full truncate text-center leading-3">{label}</span>
     </Link>
   );
 }
@@ -244,11 +244,13 @@ function NavAction({
   disabled: boolean;
   external?: boolean;
 }) {
+  const className =
+    "flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium";
   if (disabled || !href) {
     return (
-      <span className="flex min-h-[3.75rem] flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-faint/40">
+      <span className={`${className} text-faint/40`}>
         <Icon />
-        <span className="max-w-[4.5rem] truncate text-center leading-3">{label}</span>
+        <span className="w-full truncate text-center leading-3">{label}</span>
       </span>
     );
   }
@@ -257,10 +259,10 @@ function NavAction({
     <a
       href={href}
       rel={external ? "noreferrer" : undefined}
-      className="flex min-h-[3.75rem] flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium text-faint active:text-accent"
+      className={`${className} text-faint active:text-accent`}
     >
       <Icon />
-      <span className="max-w-[4.5rem] truncate text-center leading-3">{label}</span>
+      <span className="w-full truncate text-center leading-3">{label}</span>
     </a>
   );
 }

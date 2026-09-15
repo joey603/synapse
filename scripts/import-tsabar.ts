@@ -1,6 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 
 import { TSABAR_NURSE, TSABAR_PATIENTS, type TsabarPatient } from "../prisma/data/tsabar-refoua";
+import {
+  isOperationalContactDump,
+  parseOperationalNote,
+  parsePlannedDischargeDate,
+  parseWeeklyVisitTargets,
+} from "../src/lib/patients/had-frequency";
+import { jerusalemDateKey } from "../src/lib/visits/time";
 
 const PLANNING = /🏡|☎️|🟢|🔴|🚨|❌|prévu le/i;
 
@@ -13,6 +20,19 @@ type Existing = {
   phone: string | null;
   contactName: string | null;
   referringNurse: string | null;
+  accessInstructions: string | null;
+  weeklyInPersonVisits: number | null;
+  weeklyVirtualVisits: number | null;
+  plannedDischargeDate: Date | null;
+  operationalNote: string | null;
+};
+
+type HadFields = {
+  accessInstructions: string | null;
+  weeklyInPersonVisits: number | null;
+  weeklyVirtualVisits: number | null;
+  plannedDischargeDate: Date | null;
+  operationalNote: string | null;
 };
 
 type Report = {
@@ -44,6 +64,11 @@ export async function importTsabarPatients(prisma: PrismaClient) {
       phone: true,
       contactName: true,
       referringNurse: true,
+      accessInstructions: true,
+      weeklyInPersonVisits: true,
+      weeklyVirtualVisits: true,
+      plannedDischargeDate: true,
+      operationalNote: true,
     },
   });
   const report: Report = {
@@ -54,6 +79,7 @@ export async function importTsabarPatients(prisma: PrismaClient) {
     uncertain: [],
     historySkipped: await importValidatedHistory(prisma, []),
   };
+  const referenceYear = Number(jerusalemDateKey(new Date()).slice(0, 4));
 
   for (const row of TSABAR_PATIENTS) {
     noteUncertainty(row, report);
@@ -67,7 +93,10 @@ export async function importTsabarPatients(prisma: PrismaClient) {
       report.conflicts.push(`${label(row)} : plusieurs dossiers correspondent, rien n’a été modifié.`);
       continue;
     }
-    const note = operationalNote(row);
+    const had = hadFieldsFromRow(row, referenceYear);
+    if (!had.targetsOk) {
+      report.uncertain.push(`${label(row)} : rythme non reconnu « ${row.frequency} », cibles hebdomadaires non écrites.`);
+    }
     if (matches.length === 0) {
       const created = await prisma.patient.create({
         data: {
@@ -76,9 +105,10 @@ export async function importTsabarPatients(prisma: PrismaClient) {
           city: row.city,
           address: row.address,
           phone: row.phones.length ? row.phones.join(" / ") : null,
-          contactName: note,
+          contactName: null,
           referringNurse: TSABAR_NURSE,
           status: "ACTIVE",
+          ...had.fields,
         },
         select: {
           id: true,
@@ -89,6 +119,11 @@ export async function importTsabarPatients(prisma: PrismaClient) {
           phone: true,
           contactName: true,
           referringNurse: true,
+          accessInstructions: true,
+          weeklyInPersonVisits: true,
+          weeklyVirtualVisits: true,
+          plannedDischargeDate: true,
+          operationalNote: true,
         },
       });
       existing.push(created);
@@ -96,12 +131,12 @@ export async function importTsabarPatients(prisma: PrismaClient) {
       continue;
     }
     const current = matches[0]!;
-    const data: { phone?: string; address?: string; city?: string; contactName?: string; referringNurse?: string } = {};
+    const data: Record<string, string | number | Date | null> = {};
     fillMissing(current, "phone", row.phones.length ? row.phones.join(" / ") : null, data, report, row);
     fillMissing(current, "address", row.address, data, report, row);
     fillMissing(current, "city", row.city, data, report, row);
-    fillMissing(current, "contactName", note, data, report, row);
     fillMissing(current, "referringNurse", TSABAR_NURSE, data, report, row);
+    applyHadMigration(current, had.fields, data);
     if (Object.keys(data).length === 0) {
       report.unchanged.push(label(row));
       continue;
@@ -112,7 +147,6 @@ export async function importTsabarPatients(prisma: PrismaClient) {
   }
 
   report.uncertain.push("Rephael et Dor partagent la même adresse à נס ציונה. Ils restent deux dossiers distincts.");
-  report.uncertain.push("Le rythme, l’accès et la fin HAD indiquée sont notés dans le champ administratif « personne de contact », faute de champ dédié. Ce n’est pas une donnée clinique.");
   return report;
 }
 
@@ -136,6 +170,52 @@ export async function importValidatedHistory(
   if (skipped.length === items.length) return skipped;
   skipped.push("Historique fourni mais non importé : le rattachement n’est pas encore validé dans cette liste.");
   return skipped;
+}
+
+function hadFieldsFromRow(row: TsabarPatient, referenceYear: number): { fields: HadFields; targetsOk: boolean } {
+  const targets = parseWeeklyVisitTargets(row.frequency);
+  const dischargeOnly = Boolean(row.operations?.match(/Fin HAD indiquée/i));
+  const note = parseOperationalNote(row.operations);
+  return {
+    targetsOk: targets != null,
+    fields: {
+      accessInstructions: row.access,
+      weeklyInPersonVisits: targets?.weeklyInPersonVisits ?? null,
+      weeklyVirtualVisits: targets?.weeklyVirtualVisits ?? null,
+      plannedDischargeDate: parsePlannedDischargeDate(row.operations, referenceYear),
+      operationalNote: dischargeOnly && !note ? null : note,
+    },
+  };
+}
+
+function applyHadMigration(current: Existing, fields: HadFields, data: Record<string, string | number | Date | null>) {
+  const pairs: Array<[keyof HadFields, HadFields[keyof HadFields]]> = [
+    ["accessInstructions", fields.accessInstructions],
+    ["weeklyInPersonVisits", fields.weeklyInPersonVisits],
+    ["weeklyVirtualVisits", fields.weeklyVirtualVisits],
+    ["plannedDischargeDate", fields.plannedDischargeDate],
+    ["operationalNote", fields.operationalNote],
+  ];
+  for (const [field, incoming] of pairs) {
+    if (incoming == null) continue;
+    const stored = current[field];
+    if (stored == null || stored === "") {
+      data[field] = incoming;
+      continue;
+    }
+    if (field === "plannedDischargeDate") {
+      const left = stored instanceof Date ? stored.getTime() : new Date(String(stored)).getTime();
+      const right = incoming instanceof Date ? incoming.getTime() : NaN;
+      if (left !== right) data[field] = incoming;
+      continue;
+    }
+    if (String(stored) !== String(incoming)) {
+      data[field] = incoming;
+    }
+  }
+  if (isOperationalContactDump(current.contactName)) {
+    data.contactName = null;
+  }
 }
 
 function noteUncertainty(row: TsabarPatient, report: Report) {
@@ -172,9 +252,9 @@ function digits(value: string | null) {
 
 function fillMissing(
   current: Existing,
-  field: "phone" | "address" | "city" | "contactName" | "referringNurse",
+  field: "phone" | "address" | "city" | "referringNurse",
   incoming: string | null,
-  data: Record<string, string>,
+  data: Record<string, string | number | Date | null>,
   report: Report,
   row: TsabarPatient,
 ) {
@@ -187,16 +267,6 @@ function fillMissing(
   if (stored !== incoming) {
     report.conflicts.push(`${label(row)} : ${field} déjà renseigné autrement, valeur existante conservée.`);
   }
-}
-
-function operationalNote(row: TsabarPatient) {
-  return [
-    row.access ? `Accès: ${row.access}` : null,
-    `Rythme: ${row.frequency}`,
-    row.operations,
-  ]
-    .filter(Boolean)
-    .join(". ");
 }
 
 function label(row: TsabarPatient) {

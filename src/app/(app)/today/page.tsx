@@ -6,10 +6,13 @@ import { TaskInbox } from "@/components/tasks/TaskInbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
+import { weeklyHadShortLabel } from "@/components/visits/WeeklyHadProgress";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
+import { weekStartsOnFor } from "@/lib/visits/had-week";
+import { loadWeeklyHadForPatients } from "@/lib/visits/had-week-load";
 import { formatJerusalemInput, jerusalemDateKey, jerusalemDayBounds } from "@/lib/visits/time";
 import { visitHrefForStatus, workflowStatus, type WorkflowLabel } from "@/lib/visits/workflow-status";
 
@@ -25,7 +28,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       where: { occurredAt: { gte: start, lt: end } },
       orderBy: { occurredAt: "asc" },
       include: {
-        patient: { select: { firstName: true, lastName: true, city: true } },
+        patient: {
+          select: {
+            firstName: true,
+            lastName: true,
+            city: true,
+            weeklyInPersonVisits: true,
+            weeklyVirtualVisits: true,
+          },
+        },
         report: { select: { status: true } },
         recording: { select: { status: true } },
         transcript: { select: { id: true } },
@@ -57,6 +68,23 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   ]);
 
   const dated = visits.map(withFlow);
+  const weekByPatient = await loadWeeklyHadForPatients(
+    db,
+    [
+      ...new Map(
+        dated.map((visit) => [
+          visit.patientId,
+          {
+            id: visit.patientId,
+            weeklyInPersonVisits: visit.patient.weeklyInPersonVisits,
+            weeklyVirtualVisits: visit.patient.weeklyVirtualVisits,
+          },
+        ]),
+      ).values(),
+    ],
+    now,
+    weekStartsOnFor(locale),
+  );
   const openReports = dated.filter((visit) => visit.flow === "TRANSMISSION_GENERATED").length;
   const dateLabel = new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
     timeZone: "Asia/Jerusalem",
@@ -85,30 +113,37 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
       {tab === "tasks" ? <TaskInbox locale={locale} next="/today?tab=tasks" /> : null}
 
-      {tab === "tasks" ? null : <div className="grid grid-cols-2 gap-2">
-        <Count label={t(locale, "todayPlanned")} value={dated.length} />
-        <Count label={t(locale, "todayInPerson")} value={dated.filter((visit) => visit.type === "IN_PERSON").length} />
-        <Count label={t(locale, "todayVirtual")} value={dated.filter((visit) => visit.type === "VIRTUAL").length} />
-        <Count label={t(locale, "todayOpenReports")} value={openReports} />
-        <Count label={t(locale, "todayImportant")} value={important} wide />
-      </div>}
+      {tab === "tasks" ? null : (
+        <div className="grid grid-cols-2 gap-2">
+          <Count label={t(locale, "todayPlanned")} value={dated.length} />
+          <Count label={t(locale, "todayInPerson")} value={dated.filter((visit) => visit.type === "IN_PERSON").length} />
+          <Count label={t(locale, "todayVirtual")} value={dated.filter((visit) => visit.type === "VIRTUAL").length} />
+          <Count label={t(locale, "todayOpenReports")} value={openReports} />
+          <Count label={t(locale, "todayImportant")} value={important} wide />
+        </div>
+      )}
 
       {tab === "tasks" ? null : dated.length === 0 ? (
         <EmptyState title={t(locale, "agendaEmpty")} body={t(locale, "actionTodayHint")} />
       ) : (
         <SurfaceCard>
-          {dated.map((visit, index) => (
-            <VisitLine
-              key={visit.id}
-              locale={locale}
-              href={visitHrefForStatus(visit.patientId, visit.id, visit.flow)}
-              name={`${visit.patient.firstName} ${visit.patient.lastName}`}
-              detail={`${t(locale, visitTypeLabel(visit.type))}${visit.patient.city ? ` · ${visit.patient.city}` : ""}`}
-              flow={visit.flow}
-              time={formatJerusalemInput(visit.occurredAt).slice(11)}
-              first={index === 0}
-            />
-          ))}
+          {dated.map((visit, index) => {
+            const weekLabel = weeklyHadShortLabel(locale, weekByPatient.get(visit.patientId));
+            return (
+              <VisitLine
+                key={visit.id}
+                locale={locale}
+                href={visitHrefForStatus(visit.patientId, visit.id, visit.flow)}
+                name={`${visit.patient.firstName} ${visit.patient.lastName}`}
+                detail={[t(locale, visitTypeLabel(visit.type)), visit.patient.city, weekLabel]
+                  .filter(Boolean)
+                  .join(" · ")}
+                flow={visit.flow}
+                time={formatJerusalemInput(visit.occurredAt).slice(11)}
+                first={index === 0}
+              />
+            );
+          })}
         </SurfaceCard>
       )}
 
@@ -166,7 +201,11 @@ function VisitLine({
           <span className="block truncate text-[15px] font-semibold text-ink">{name}</span>
           <span className="block truncate text-sm text-muted">{detail}</span>
         </span>
-        <span className={`max-w-[7.5rem] shrink-0 rounded-full px-2.5 py-1 text-center text-xs font-semibold leading-4 ${action ? "bg-accent text-white" : "bg-surface text-muted"}`}>
+        <span
+          className={`max-w-[7.5rem] shrink-0 rounded-full px-2.5 py-1 text-center text-xs font-semibold leading-4 ${
+            action ? "bg-accent text-white" : "bg-surface text-muted"
+          }`}
+        >
           {t(locale, action ?? workflowKey(flow))}
         </span>
       </Link>
@@ -183,7 +222,24 @@ function Count({ label, value, wide = false }: { label: string; value: number; w
   );
 }
 
-function withFlow<T extends { report: { status: "DRAFT" | "AI_GENERATED" | "REVIEWED" | "VALIDATED" } | null; recording: { status: string } | null; transcript: { id: string } | null; extraction: { id: string } | null; pipelineStatus: "IDLE" | "UPLOADED" | "TRANSCRIBING" | "TRANSCRIBED" | "EXTRACTING" | "EXTRACTED" | "GENERATING" | "READY" | "FAILED" }>(visit: T) {
+function withFlow<
+  T extends {
+    report: { status: "DRAFT" | "AI_GENERATED" | "REVIEWED" | "VALIDATED" } | null;
+    recording: { status: string } | null;
+    transcript: { id: string } | null;
+    extraction: { id: string } | null;
+    pipelineStatus:
+      | "IDLE"
+      | "UPLOADED"
+      | "TRANSCRIBING"
+      | "TRANSCRIBED"
+      | "EXTRACTING"
+      | "EXTRACTED"
+      | "GENERATING"
+      | "READY"
+      | "FAILED";
+  },
+>(visit: T) {
   return {
     ...visit,
     flow: workflowStatus({

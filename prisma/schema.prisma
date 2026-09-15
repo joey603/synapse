@@ -127,6 +127,11 @@ model Patient {
   referringPsychiatrist String?
   referringNurse        String?
   admittedAt            DateTime?     @db.Date
+  accessInstructions    String?
+  weeklyInPersonVisits  Int?
+  weeklyVirtualVisits   Int?
+  plannedDischargeDate  DateTime?     @db.Date
+  operationalNote       String?
   status                PatientStatus @default(ACTIVE)
 
   primaryDiagnosis      String?

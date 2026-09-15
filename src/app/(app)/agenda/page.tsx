@@ -5,12 +5,15 @@ import { Suspense } from "react";
 import { TaskInbox } from "@/components/tasks/TaskInbox";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { VisitForm } from "@/components/visits/VisitForm";
+import { weeklyHadShortLabel } from "@/components/visits/WeeklyHadProgress";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
 import { resolveLocale, type Locale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
+import { weekStartsOnFor } from "@/lib/visits/had-week";
+import { loadWeeklyHadForPatients } from "@/lib/visits/had-week-load";
 import {
   formatJerusalemInput,
   isJerusalemDayKey,
@@ -55,7 +58,7 @@ export default async function AgendaPage({
   const days = monthDays(monthKey);
   const rangeStart = jerusalemDayBoundsFor(days[0]!)?.start ?? now;
   const rangeEnd = jerusalemDayBoundsFor(days[days.length - 1]!)?.end ?? now;
-  const weekStart = locale === "he" ? 0 : 1;
+  const weekStart = weekStartsOnFor(locale);
   const leading = weekdayColumn(days[0]!, weekStart);
 
   const [editing, patients, visits] = await Promise.all([
@@ -70,14 +73,32 @@ export default async function AgendaPage({
       ? db.patient.findMany({
           where: { status: "ACTIVE" },
           orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-          select: { id: true, firstName: true, lastName: true, city: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            city: true,
+            weeklyInPersonVisits: true,
+            weeklyVirtualVisits: true,
+          },
         })
       : [],
     db.visit.findMany({
       ...join,
       where: { occurredAt: { gte: rangeStart, lt: rangeEnd } },
       orderBy: { occurredAt: "asc" },
-      include: { patient: { select: { id: true, firstName: true, lastName: true, city: true } } },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            city: true,
+            weeklyInPersonVisits: true,
+            weeklyVirtualVisits: true,
+          },
+        },
+      },
     }),
   ]);
 
@@ -95,6 +116,33 @@ export default async function AgendaPage({
   const dayVisits = activeDay
     ? visits.filter((visit) => jerusalemDateKey(visit.occurredAt) === activeDay)
     : [];
+  const weekByPatient = await loadWeeklyHadForPatients(
+    db,
+    [
+      ...new Map(
+        [
+          ...patients.map((patient) => [
+            patient.id,
+            {
+              id: patient.id,
+              weeklyInPersonVisits: patient.weeklyInPersonVisits,
+              weeklyVirtualVisits: patient.weeklyVirtualVisits,
+            },
+          ] as const),
+          ...dayVisits.map((visit) => [
+            visit.patientId,
+            {
+              id: visit.patientId,
+              weeklyInPersonVisits: visit.patient.weeklyInPersonVisits,
+              weeklyVirtualVisits: visit.patient.weeklyVirtualVisits,
+            },
+          ] as const),
+        ],
+      ).values(),
+    ],
+    now,
+    weekStart,
+  );
   const headers = weekHeaders(locale, weekStart);
   const prev = shiftMonth(monthKey, -1);
   const next = shiftMonth(monthKey, 1);
@@ -195,8 +243,13 @@ export default async function AgendaPage({
                             {visit.patient.firstName} {visit.patient.lastName}
                           </span>
                           <span className="block truncate text-sm text-muted">
-                            {t(locale, visitTypeLabel(visit.type))}
-                            {visit.patient.city ? ` · ${visit.patient.city}` : ""}
+                            {[
+                              t(locale, visitTypeLabel(visit.type)),
+                              visit.patient.city,
+                              weeklyHadShortLabel(locale, weekByPatient.get(visit.patientId)),
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </span>
                         </span>
                       </Link>
@@ -230,7 +283,17 @@ export default async function AgendaPage({
                   locale={locale}
                   action={editing ? `/api/visits/${editing.id}` : "/api/visits"}
                   patientId={editing?.patientId}
-                  patients={editing ? undefined : patients}
+                  patients={
+                    editing
+                      ? undefined
+                      : patients.map((patient) => ({
+                          id: patient.id,
+                          firstName: patient.firstName,
+                          lastName: patient.lastName,
+                          city: patient.city,
+                          weekLabel: weeklyHadShortLabel(locale, weekByPatient.get(patient.id)),
+                        }))
+                  }
                   returnTo={`/agenda?month=${monthKey}&day=${activeDay}`}
                   type={editing?.type}
                   occurredAt={

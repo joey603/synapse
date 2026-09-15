@@ -20,7 +20,13 @@ export function VisitForm({
   locale: Locale;
   action: string;
   patientId?: string;
-  patients?: { id: string; firstName: string; lastName: string; city: string | null }[];
+  patients?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    city: string | null;
+    weekLabel?: string | null;
+  }[];
   returnTo?: string;
   type?: VisitType;
   occurredAt: string;
@@ -49,6 +55,7 @@ export function VisitForm({
                 <option key={patient.id} value={patient.id}>
                   {patient.firstName} {patient.lastName}
                   {patient.city ? ` · ${patient.city}` : ""}
+                  {patient.weekLabel ? ` · ${patient.weekLabel}` : ""}
                 </option>
               ))}
             </select>
