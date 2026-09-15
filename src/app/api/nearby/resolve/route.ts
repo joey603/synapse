@@ -19,9 +19,20 @@ export async function POST(request: Request) {
   const patients = await db.patient.findMany({
     where: { status: "ACTIVE", OR: [{ address: { not: null } }, { city: { not: null } }] },
     select: { id: true, address: true, city: true, latitude: true, longitude: true, geoKey: true },
-    take: 80,
     orderBy: { updatedAt: "desc" },
   });
+
+  // Alignement des clés sans rappeler Nominatim quand le point existe déjà.
+  for (const patient of patients) {
+    const key = placeKey(patient.address, patient.city);
+    if (!key || patient.geoKey === key) continue;
+    if (patient.latitude == null || patient.longitude == null) continue;
+    await db.patient.update({
+      where: { id: patient.id },
+      data: { geoKey: key },
+    });
+    patient.geoKey = key;
+  }
 
   const pending = patients.filter((patient) => {
     const key = placeKey(patient.address, patient.city);
@@ -38,7 +49,13 @@ export async function POST(request: Request) {
         where: { id: patient.id },
         data: point
           ? { latitude: point.latitude, longitude: point.longitude, geoKey: key }
-          : { latitude: null, longitude: null, geoKey: key },
+          : {
+              geoKey: key,
+              // On garde un point déjà trouvé : un échec Nominatim ne doit pas l’effacer.
+              ...(patient.latitude == null || patient.longitude == null
+                ? { latitude: null, longitude: null }
+                : {}),
+            },
       });
     } catch {
       logger.error("nearby.geocode_failed");
@@ -48,13 +65,12 @@ export async function POST(request: Request) {
   const fresh = await db.patient.findMany({
     where: { status: "ACTIVE", OR: [{ address: { not: null } }, { city: { not: null } }] },
     select: { id: true, latitude: true, longitude: true, address: true, city: true, geoKey: true },
-    take: 80,
   });
   const resolved = (patient: (typeof fresh)[number]) => patient.geoKey === placeKey(patient.address, patient.city);
 
   return NextResponse.json({
     located: fresh
-      .filter((patient) => resolved(patient) && patient.latitude != null && patient.longitude != null)
+      .filter((patient) => patient.latitude != null && patient.longitude != null)
       .map((patient) => ({
         id: patient.id,
         latitude: patient.latitude,

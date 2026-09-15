@@ -43,7 +43,7 @@ export default async function PatientsPage({
   });
 
   return (
-    <div className="absolute inset-x-5 top-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] flex min-h-0 flex-col gap-4 overflow-hidden">
+    <div className="flex flex-col gap-3">
       <header className="flex items-baseline justify-between gap-3">
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "patientsTitle")}</h1>
         <p className="shrink-0 text-sm font-medium tabular-nums text-muted">
@@ -69,12 +69,11 @@ export default async function PatientsPage({
         />
       </Suspense>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-3xl">
-        {patients.length === 0 ? (
-          <EmptyState title={t(locale, "patientsEmpty")} body={t(locale, "patientsHint")} />
-        ) : (
-          <div className="patient-scroll h-full overflow-y-auto overscroll-contain">
-            <SurfaceCard className="min-h-full">
+      {patients.length === 0 ? (
+        <EmptyState title={t(locale, "patientsEmpty")} body={t(locale, "patientsHint")} />
+      ) : (
+        <div className="patient-scroll overflow-hidden rounded-3xl">
+          <SurfaceCard>
             {patients.map((patient, index) => {
               const name = `${patient.firstName} ${patient.lastName}`;
               const meta = [patient.city, patient.primaryDiagnosis].filter(Boolean).join(" • ");
@@ -98,10 +97,9 @@ export default async function PatientsPage({
                 </div>
               );
             })}
-            </SurfaceCard>
-          </div>
-        )}
-      </div>
+          </SurfaceCard>
+        </div>
+      )}
     </div>
   );
 }

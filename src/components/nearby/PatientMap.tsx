@@ -17,19 +17,16 @@ export function PatientMap({
   here,
   pins,
   meLabel,
-  onPlace,
 }: {
   here: { lat: number; lng: number } | null;
   pins: MapPin[];
   meLabel: string;
-  onPlace?: (point: { lat: number; lng: number }) => void;
 }) {
   const node = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const groupRef = useRef<import("leaflet").LayerGroup | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const dataRef = useRef({ here, pins, meLabel });
-  const onPlaceRef = useRef(onPlace);
 
   useEffect(() => {
     const host = node.current;
@@ -48,9 +45,6 @@ export function PatientMap({
       mapRef.current = map;
       leafletRef.current = leaflet;
       groupRef.current = leaflet.layerGroup().addTo(map);
-      map.on("click", (event) => {
-        onPlaceRef.current?.({ lat: event.latlng.lat, lng: event.latlng.lng });
-      });
       paint(leaflet, map, groupRef.current, dataRef.current);
       window.setTimeout(() => {
         if (!cancelled && mapRef.current === map) map.invalidateSize();
@@ -67,14 +61,13 @@ export function PatientMap({
   }, []);
 
   useEffect(() => {
-    onPlaceRef.current = onPlace;
     dataRef.current = { here, pins, meLabel };
     const leaflet = leafletRef.current;
     const map = mapRef.current;
     const group = groupRef.current;
     if (!leaflet || !map || !group) return;
     paint(leaflet, map, group, dataRef.current);
-  }, [here, meLabel, onPlace, pins]);
+  }, [here, meLabel, pins]);
 
   return <div ref={node} className="synapse-map h-72 w-full bg-[#d5dde3]" />;
 }

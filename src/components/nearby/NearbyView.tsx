@@ -36,7 +36,7 @@ export function NearbyView({
   const [patients, setPatients] = useState(initialPatients);
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [street, setStreet] = useState<string | null>(null);
-  const [geo, setGeo] = useState<"idle" | "locating" | "ready" | "denied">("idle");
+  const [geo, setGeo] = useState<"idle" | "ready" | "denied">("idle");
   const [placing, setPlacing] = useState(needsResolve);
   const [times, setTimes] = useState<Record<string, number>>({});
   const [timing, setTiming] = useState(false);
@@ -44,8 +44,22 @@ export function NearbyView({
   const snapTimer = useRef(0);
   const lastRaw = useRef<{ lat: number; lng: number } | null>(null);
   const lastEta = useRef<{ lat: number; lng: number; key: string } | null>(null);
+  const hasFix = useRef(false);
+  const snapToStreetRef = useRef<(point: { lat: number; lng: number }) => Promise<void>>(async () => undefined);
+
+  const showFix = useCallback((point: { lat: number; lng: number }) => {
+    hasFix.current = true;
+    setHere(point);
+    setGeo("ready");
+    try {
+      sessionStorage.setItem("synapse_here", JSON.stringify(point));
+    } catch {
+      // Cache local optionnel.
+    }
+  }, []);
 
   const snapToStreet = useCallback(async (point: { lat: number; lng: number }) => {
+    showFix(point);
     try {
       const response = await fetch("/api/nearby/snap", {
         method: "POST",
@@ -57,75 +71,80 @@ export function NearbyView({
         const lat = Number(body.lat);
         const lng = Number(body.lng);
         if (Number.isFinite(lat) && Number.isFinite(lng)) {
-          setHere({ lat, lng });
+          showFix({ lat, lng });
           setStreet(typeof body.name === "string" && body.name ? body.name : null);
-          setGeo("ready");
           return;
         }
       }
     } catch {
       // On garde le point GPS si la rue n’est pas trouvable.
     }
-    setHere(point);
+    showFix(point);
     setStreet(null);
-    setGeo("ready");
-  }, []);
-
-  const queueSnap = useCallback(
-    (point: { lat: number; lng: number }, source: "gps" | "tap") => {
-      if (source === "gps" && lastRaw.current && haversineMeters(lastRaw.current, point) < 20) return;
-      lastRaw.current = point;
-      window.clearTimeout(snapTimer.current);
-      snapTimer.current = window.setTimeout(() => {
-        void snapToStreet(point);
-      }, source === "tap" ? 0 : 250);
-    },
-    [snapToStreet],
-  );
-
-  const followGps = useCallback(() => {
-    if (!navigator.geolocation) {
-      setGeo("denied");
-      return;
-    }
-    setGeo("locating");
-    if (watchRef.current) {
-      navigator.geolocation.clearWatch(watchRef.current);
-      watchRef.current = 0;
-    }
-    const accept = (position: GeolocationPosition) => {
-      queueSnap({ lat: position.coords.latitude, lng: position.coords.longitude }, "gps");
-    };
-    const fail = (error: GeolocationPositionError) => {
-      if (error.code === error.PERMISSION_DENIED) setGeo("denied");
-    };
-    navigator.geolocation.getCurrentPosition(accept, fail, {
-      enableHighAccuracy: true,
-      timeout: 20000,
-      maximumAge: 0,
-    });
-    watchRef.current = navigator.geolocation.watchPosition(accept, fail, {
-      enableHighAccuracy: true,
-      maximumAge: 0,
-    });
-  }, [queueSnap]);
+  }, [showFix]);
+  snapToStreetRef.current = snapToStreet;
 
   useEffect(() => {
-    const id = window.setTimeout(followGps, 0);
+    try {
+      const cached = sessionStorage.getItem("synapse_here");
+      if (cached) {
+        const parsed = JSON.parse(cached) as { lat?: unknown; lng?: unknown };
+        const lat = Number(parsed.lat);
+        const lng = Number(parsed.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          lastRaw.current = { lat, lng };
+          showFix({ lat, lng });
+        }
+      }
+    } catch {
+      // Pas de cache.
+    }
+
+    if (!navigator.geolocation) {
+      if (!hasFix.current) setGeo("denied");
+      return;
+    }
+
+    const accept = (position: GeolocationPosition) => {
+      const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+      const moved = !lastRaw.current || haversineMeters(lastRaw.current, point) >= 20;
+      lastRaw.current = point;
+      showFix(point);
+      if (!moved) return;
+      window.clearTimeout(snapTimer.current);
+      snapTimer.current = window.setTimeout(() => {
+        void snapToStreetRef.current(point);
+      }, 0);
+    };
+    const onDenied = (error: GeolocationPositionError) => {
+      if (error.code === error.PERMISSION_DENIED && !hasFix.current) setGeo("denied");
+    };
+
+    navigator.geolocation.getCurrentPosition(accept, onDenied, {
+      enableHighAccuracy: false,
+      timeout: 8000,
+      maximumAge: 300_000,
+    });
+    watchRef.current = navigator.geolocation.watchPosition(accept, onDenied, {
+      enableHighAccuracy: false,
+      maximumAge: 60_000,
+    });
+
     return () => {
-      window.clearTimeout(id);
       window.clearTimeout(snapTimer.current);
       if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current);
     };
-  }, [followGps]);
+  }, [showFix]);
 
   useEffect(() => {
     if (!needsResolve) return;
     let stop = false;
     let lastPending = Number.POSITIVE_INFINITY;
+    let stalls = 0;
 
     async function resolvePlaces() {
-      for (let round = 0; round < 30 && !stop; round += 1) {
+      // Assez de tours pour toute la liste (lots de 3), avec quelques reprises si Nominatim rate-limite.
+      for (let round = 0; round < 80 && !stop; round += 1) {
         const response = await fetch("/api/nearby/resolve", { method: "POST" });
         if (!response.ok || stop) break;
         const body = (await response.json()) as {
@@ -140,8 +159,14 @@ export function NearbyView({
           }),
         );
         const pending = body.pending ?? 0;
-        if (pending === 0 || pending >= lastPending) break;
-        lastPending = pending;
+        if (pending === 0) break;
+        if (pending >= lastPending) {
+          stalls += 1;
+          if (stalls >= 5) break;
+        } else {
+          stalls = 0;
+          lastPending = pending;
+        }
       }
       if (!stop) setPlacing(false);
     }
@@ -154,40 +179,56 @@ export function NearbyView({
 
   useEffect(() => {
     if (!here) return;
-    const locatedKey = patients
+    const locatedIds = patients
       .filter((patient) => patient.latitude != null && patient.longitude != null)
-      .map((patient) => patient.id)
-      .join(",");
-    if (!locatedKey) return;
-    if (lastEta.current?.key === locatedKey && haversineMeters(lastEta.current, here) < 150) return;
-    let stop = false;
+      .map((patient) => patient.id);
+    if (locatedIds.length === 0) return;
+    const locatedKey = locatedIds.join(",");
+    if (lastEta.current?.key === locatedKey && haversineMeters(lastEta.current, here) < 250) return;
+
+    const origin = here;
     const id = window.setTimeout(() => {
-      lastEta.current = { ...here, key: locatedKey };
+      lastEta.current = { ...origin, key: locatedKey };
       void (async () => {
         setTiming(true);
         try {
-          const response = await fetch("/api/nearby/eta", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(here),
-          });
-          if (!response.ok || stop) return;
-          const body = (await response.json()) as { times?: Array<{ id?: unknown; seconds?: unknown }> };
-          const next: Record<string, number> = {};
-          for (const item of body.times ?? []) {
-            const seconds = Number(item.seconds);
-            if (typeof item.id === "string" && Number.isFinite(seconds) && seconds > 0) next[item.id] = seconds;
+          let missing = locatedIds;
+          for (let round = 0; round < 8 && missing.length > 0; round += 1) {
+            const response = await fetch("/api/nearby/eta", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(round === 0 ? origin : { ...origin, ids: missing }),
+            });
+            if (!response.ok) break;
+            const body = (await response.json()) as {
+              times?: Array<{ id?: unknown; seconds?: unknown }>;
+              missing?: unknown;
+            };
+            const batch: Record<string, number> = {};
+            for (const item of body.times ?? []) {
+              const seconds = Number(item.seconds);
+              if (typeof item.id === "string" && Number.isFinite(seconds) && seconds > 0) {
+                batch[item.id] = seconds;
+              }
+            }
+            if (Object.keys(batch).length > 0) setTimes((current) => ({ ...current, ...batch }));
+            const still = Array.isArray(body.missing)
+              ? body.missing.filter((value): value is string => typeof value === "string")
+              : missing.filter((patientId) => batch[patientId] == null);
+            if (still.length === 0) break;
+            if (still.length >= missing.length && round > 0) {
+              await new Promise((resolve) => window.setTimeout(resolve, 700));
+            }
+            missing = still;
           }
-          if (!stop) setTimes(next);
         } catch {
           // L’itinéraire Waze reste disponible sans le temps.
         } finally {
-          if (!stop) setTiming(false);
+          setTiming(false);
         }
       })();
-    }, 400);
+    }, 900);
     return () => {
-      stop = true;
       window.clearTimeout(id);
     };
   }, [here, patients]);
@@ -224,10 +265,8 @@ export function NearbyView({
           here={here}
           pins={pins}
           meLabel={t(locale, "nearbyMe")}
-          onPlace={(point) => queueSnap(point, "tap")}
         />
       </div>
-      {geo === "locating" ? <p className="text-sm text-muted">{t(locale, "nearbyLocating")}</p> : null}
       {street ? (
         <p className="text-sm text-muted">
           {t(locale, "nearbyOnRoad")}

@@ -24,7 +24,6 @@ export default async function NearbyPage() {
       longitude: true,
       geoKey: true,
     },
-    take: 80,
   });
 
   return (

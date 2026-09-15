@@ -37,7 +37,7 @@ export function AppShell({
           </div>
         </div>
       </div>
-      <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-36 pt-3">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-3">{children}</main>
       <BottomNav locale={locale} />
     </div>
   );
