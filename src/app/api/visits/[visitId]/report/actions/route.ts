@@ -9,7 +9,8 @@ import { parseStored } from "@/lib/clinical/schema";
 import { composeStructuredSections } from "@/lib/clinical/structured-report";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { PROMPT_VERSION } from "../../../../../../../prompts/nursing-report-he";
+import { PROMPT_VERSION } from "../../../../../../../prompts/clinical-report";
+import { loadVisitContext } from "@/lib/ai/context";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,7 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
     include: {
       report: true,
       extraction: true,
+      transcript: true,
       patient: { include: { medications: { where: { active: true }, orderBy: { name: "asc" } } } },
     },
   });
@@ -52,11 +54,15 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
         extraction,
       ).text;
       if (providerName() === "openai") {
+        const clinicalContext = await loadVisitContext(visit.patientId, visit.id);
         text = (await getClinicalProvider().generateReport({
           extraction,
           visitType: visit.type,
           occurredAt: visit.occurredAt,
           patientName: `${visit.patient.firstName} ${visit.patient.lastName}`,
+          transcript: visit.transcript?.rawText ?? "",
+          nurseNotes: visit.notes,
+          context: clinicalContext.text,
         })).text;
       }
     } else if (action === "shorten" || action === "more_clinical" || action === "correct_hebrew") {
@@ -77,6 +83,7 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
               secondary: visit.patient.secondaryDiagnoses,
             },
             medications: visit.patient.medications,
+            sex: visit.patient.sex,
           })
         : null;
     await db.clinicalReport.update({

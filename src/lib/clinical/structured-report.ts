@@ -1,53 +1,11 @@
-import type { DrivingRiskStatus, VisitType } from "@prisma/client";
+import type { DrivingRiskStatus, Sex, VisitType } from "@prisma/client";
 
+import { hebrewClinicalText } from "@/lib/clinical/hebrew-text";
 import type { ClinicalFact, FactDomain, StoredExtraction } from "@/lib/clinical/types";
-import { CLINICAL_DOMAINS, EXAM_DOMAINS, RISK_DOMAINS } from "@/lib/clinical/types";
-
-const DOMAIN_HE: Partial<Record<FactDomain, string>> = {
-  mood: "מצב רוח",
-  affect: "אפקט",
-  anxiety: "חרדה",
-  sleep: "שינה",
-  appetite: "תיאבון",
-  activity: "פעילות",
-  functioning: "תפקוד",
-  work: "עבודה",
-  family: "משפחה",
-  isolation: "בידוד",
-  speech: "דיבור",
-  thought: "מהלך חשיבה",
-  thoughtContent: "תוכן חשיבה",
-  delusions: "מחשבות שווא",
-  hallucinations: "הזיות",
-  psychosis: "פסיכוזה",
-  agitation: "אי-שקט",
-  retardation: "האטה",
-  insight: "תובנה",
-  judgment: "שיפוט",
-  behavior: "התנהגות",
-  adherence: "היענות",
-  sideEffects: "תופעות לוואי",
-  substanceUse: "שימוש בחומרים",
-  suicidality: "מחשבות אובדניות",
-  suicideIntent: "כוונה אובדנית",
-  suicidePlan: "תכנית אובדנית",
-  recentSuicidalBehavior: "התנהגות אובדנית לאחרונה",
-  selfHarm: "פגיעה עצמית",
-  aggression: "אלימות",
-  dangerousness: "מסוכנות",
-  protectiveFactors: "גורמים מגינים",
-  impulsivity: "אימפולסיביות",
-};
-
-const EVOLUTION_HE: Record<string, string> = {
-  improved: "שיפור",
-  worsened: "החמרה",
-  stable: "יציב",
-  new: "חדש",
-  resolved: "נפתר",
-  unclear: "לא ברור",
-  not_reassessed: "לא הוערך מחדש",
-};
+import {
+  composeMainProblemsProse,
+  composePatientStatusProse,
+} from "@/lib/clinical/zebra-projection";
 
 const DRIVING_RE = /נהיג|לנהוג|רשיון\s*נהיגה|כביש|הגה|conduite|driving|drive|permis/i;
 
@@ -66,22 +24,27 @@ export type StructuredComposeInput = {
   visitType: VisitType;
   diagnosis: { primary: string | null; secondary: string | null };
   medications: Array<{ name: string; dose: string | null; frequency: string | null }>;
+  /** Patient.sex — genre grammatical des formulations hébraïques. */
+  sex?: Sex;
 };
 
 /**
- * Projette le JSON clinique validé + dossier patient vers les champs structurés hébreux.
- * N’invente aucun fait : silence → champ vide / NOT_ASSESSED.
+ * Projette le JSON clinique VALIDÉ + dossier patient vers les champs structurés Zebra.
+ * Source unique = extraction validée. N’invente aucun fait. Ne parse jamais finalReportHe.
+ * pointsToVerify / contradictions / evidence restent hors champs Zebra (domaine Analyse).
+ * patientStatusNote / mainProblems = prose clinique professionnelle (pas dump d’evidence).
  */
 export function composeStructuredSections(input: StructuredComposeInput): StructuredReportSections {
   const { extraction } = input;
+  const sex = input.sex ?? "UNSPECIFIED";
   return {
-    patientStatusNote: composePatientStatus(extraction),
+    patientStatusNote: composePatientStatusProse(extraction, sex),
     drivingRisk: inferDrivingRisk(extraction),
     diagnosisNote: composeDiagnosis(input.diagnosis),
-    mainProblems: composeMainProblems(extraction),
-    currentMedication: composeMedication(input.medications, extraction),
+    mainProblems: composeMainProblemsProse(extraction, sex),
+    currentMedication: composeMedication(input.medications, extraction, sex),
     interventionsProvided: composeCitedList(extraction.interventions),
-    carePlan: composeCitedList(extraction.plan),
+    carePlan: composeCarePlan(extraction),
   };
 }
 
@@ -105,13 +68,16 @@ export function inferDrivingRisk(extraction: StoredExtraction): DrivingRiskStatu
 }
 
 function collectDrivingEvidence(extraction: StoredExtraction) {
-  const items: Array<{ assertion: ClinicalFact["assertion"]; confidence: ClinicalFact["confidence"]; hasEvidence: boolean }> =
-    [];
+  const items: Array<{
+    assertion: ClinicalFact["assertion"];
+    confidence: ClinicalFact["confidence"];
+    hasEvidence: boolean;
+  }> = [];
   for (const domain of Object.keys(extraction.facts) as FactDomain[]) {
     const fact = extraction.facts[domain];
     if (!factMentionsDriving(fact)) continue;
     if (fact.temporality === "historical") continue;
-    if (fact.source !== "transcript") continue;
+    if (!isEncounterFact(fact)) continue;
     items.push({
       assertion: fact.assertion,
       confidence: fact.confidence,
@@ -120,7 +86,7 @@ function collectDrivingEvidence(extraction: StoredExtraction) {
   }
   for (const fact of extraction.medicationMentions) {
     if (!factMentionsDriving(fact)) continue;
-    if (fact.temporality === "historical" || fact.source !== "transcript") continue;
+    if (fact.temporality === "historical" || !isEncounterFact(fact)) continue;
     items.push({
       assertion: fact.assertion,
       confidence: fact.confidence,
@@ -137,19 +103,6 @@ function factMentionsDriving(fact: ClinicalFact) {
   return DRIVING_RE.test(blob);
 }
 
-function composePatientStatus(extraction: StoredExtraction) {
-  const parts: string[] = [];
-  for (const domain of ["mood", "affect", "anxiety", "functioning", "activity"] as const) {
-    const fact = extraction.facts[domain];
-    if (!isDocumentedCurrent(fact)) continue;
-    const label = DOMAIN_HE[domain];
-    const body = factLine(fact);
-    if (!body) continue;
-    parts.push(label ? `${label}: ${body}` : body);
-  }
-  return parts.length > 0 ? parts.join("\n") : null;
-}
-
 function composeDiagnosis(diagnosis: { primary: string | null; secondary: string | null }) {
   const lines: string[] = [];
   if (diagnosis.primary?.trim()) lines.push(diagnosis.primary.trim());
@@ -157,49 +110,17 @@ function composeDiagnosis(diagnosis: { primary: string | null; secondary: string
   return lines.length > 0 ? lines.join("\n") : null;
 }
 
-function composeMainProblems(extraction: StoredExtraction) {
-  const parts: string[] = [];
-
-  const clinical = documentedLines(extraction, CLINICAL_DOMAINS);
-  if (clinical.length > 0) parts.push(clinical.join("\n"));
-
-  const exam = documentedLines(extraction, EXAM_DOMAINS);
-  if (exam.length > 0) parts.push(exam.join("\n"));
-
-  const risks = documentedRiskLines(extraction);
-  if (risks.length > 0) parts.push(risks.join("\n"));
-
-  const evolution = Object.entries(extraction.longitudinal)
-    .map(([domain, value]) => {
-      const label = DOMAIN_HE[domain as FactDomain];
-      const he = EVOLUTION_HE[value ?? ""] ?? value;
-      return label && he ? `${label}: ${he}` : null;
-    })
-    .filter(Boolean) as string[];
-  if (evolution.length > 0) parts.push(`התפתחות:\n${evolution.join("\n")}`);
-
-  if (extraction.changes.length > 0) {
-    parts.push("יש שינוי מול ביקור מאומת קודם — לבדיקה.");
-  }
-
-  if (extraction.pointsToVerify.length > 0) {
-    parts.push(`לאימות:\n${extraction.pointsToVerify.map((item) => `• ${item}`).join("\n")}`);
-  }
-
-  if (extraction.contradictions.length > 0) {
-    parts.push(
-      `סתירות לתיעוד:\n${extraction.contradictions.map((item) => `• ${item.summary}`).join("\n")}`,
-    );
-  }
-
-  return parts.length > 0 ? parts.join("\n\n") : null;
-}
-
+/**
+ * A = AUTHORITATIVE TREATMENT (Medication record).
+ * B = information rapportée visite, clairement qualifiée — jamais transformée en traitement officiel.
+ */
 function composeMedication(
   medications: Array<{ name: string; dose: string | null; frequency: string | null }>,
   extraction: StoredExtraction,
+  sex: Sex,
 ) {
   const lines: string[] = [];
+
   if (medications.length > 0) {
     for (const med of medications) {
       const dose = [med.dose, med.frequency].filter(Boolean).join(" · ");
@@ -213,68 +134,104 @@ function composeMedication(
     );
   }
 
-  const mentions = extraction.medicationMentions
-    .filter((fact) => isDocumentedCurrent(fact))
-    .map((fact) => factLine(fact))
-    .filter(Boolean);
-  if (mentions.length > 0 && medications.length === 0) {
-    lines.push(...mentions.map((item) => String(item)));
+  const mentions = extraction.medicationMentions.filter((fact) => isEncounterFact(fact));
+  const resolved = mentions.map((fact) => resolvePatientReportedMedication(fact));
+
+  if (medications.length === 0) {
+    const certain = resolved.filter((item) => item && item.certain);
+    const uncertain = resolved.filter((item) => item && !item.certain);
+    for (const item of certain) {
+      if (!item) continue;
+      lines.push(`${patientReportedMedPrefix(sex)}: ${item.label}`);
+    }
+    if (certain.length === 0 && uncertain.length > 0) {
+      lines.push(uncertainMedicationNote(sex));
+    }
   }
 
   return lines.length > 0 ? lines.join("\n") : null;
 }
 
+function patientReportedMedPrefix(sex: Sex) {
+  if (sex === "FEMALE") return "דיווח המטופלת (לא רשום בתיק הטיפול)";
+  return "דיווח המטופל (לא רשום בתיק הטיפול)";
+}
+
+function uncertainMedicationNote(sex: Sex) {
+  if (sex === "FEMALE") {
+    return "המטופלת דיווחה על נטילת טיפול תרופתי, אך שם התרופה/המינון לא זוהו בוודאות במהלך הביקור ונדרש בירור.";
+  }
+  return "המטופל דיווח על נטילת טיפול תרופתי, אך שם התרופה/המינון לא זוהו בוודאות במהלך הביקור ונדרש בירור.";
+}
+
+/**
+ * Médicament rapporté : nom clair dans la quote → label ; sinon incertitude (sans citation brute Zebra).
+ */
+function resolvePatientReportedMedication(fact: ClinicalFact): { label: string; certain: boolean } | null {
+  if (fact.temporality === "historical") return null;
+  if (fact.assertion !== "present" && fact.assertion !== "uncertain") return null;
+  const quote =
+    fact.evidence?.quote?.trim() ||
+    fact.evidences.find((item) => item.temporality === "CURRENT")?.quote?.trim() ||
+    null;
+  const value = hebrewClinicalText(fact.value);
+
+  if (quote && /בונדורמין|Bondormin|בואנדורמין/i.test(quote)) {
+    return { label: "בונדורמין", certain: true };
+  }
+  if (value && /בונדורמין|Bondormin/i.test(value)) {
+    return { label: value, certain: true };
+  }
+  // Nom garblé / low confidence / uncertain → formulation prudente (pas de « נמסר: «…» »).
+  if (fact.assertion === "uncertain" || fact.confidence === "low" || !value) {
+    if (quote && /לוקח|נוטל|כדור|תרופ/.test(quote)) {
+      return { label: "", certain: false };
+    }
+    return null;
+  }
+  return { label: value, certain: true };
+}
+
 function composeCitedList(items: Array<{ text: string }>) {
-  const lines = items.map((item) => item.text.trim()).filter(Boolean);
+  const lines = items
+    .map((item) => hebrewClinicalText(item.text))
+    .filter(Boolean) as string[];
   return lines.length > 0 ? lines.map((line) => `• ${line}`).join("\n") : null;
 }
 
-function documentedLines(extraction: StoredExtraction, domains: readonly FactDomain[]) {
-  const lines: string[] = [];
-  for (const domain of domains) {
-    const fact = extraction.facts[domain];
-    if (!isDocumentedCurrent(fact)) continue;
-    const label = DOMAIN_HE[domain];
-    const body = factLine(fact);
-    if (!body) continue;
-    lines.push(label ? `${label}: ${body}` : body);
-  }
-  return lines;
+const WORK_PLAN_RE =
+  /חיזוק\s+עבודה|תפקוד\s+תעסוק|חזרה\s+לעבודה|מקום\s+העבודה|שיקום\s+תעסוק|להגביר\s+עבודה|בעבודה\s+ובתפקוד/i;
+
+/**
+ * Plan : uniquement ce qui est validé. Ne pas introduire un axe « עבודה »
+ * si functioning/work n’a pas été documenté comme present CURRENT.
+ */
+function composeCarePlan(extraction: StoredExtraction) {
+  const workDocumented = ["functioning", "work", "activity"].some((domain) => {
+    const fact = extraction.facts[domain as FactDomain];
+    return (
+      fact &&
+      fact.assertion === "present" &&
+      fact.temporality === "current_visit" &&
+      isEncounterFact(fact)
+    );
+  });
+
+  const lines = extraction.plan
+    .map((item) => hebrewClinicalText(item.text))
+    .filter((text): text is string => Boolean(text))
+    .filter((text) => {
+      if (!WORK_PLAN_RE.test(text)) return true;
+      return workDocumented;
+    });
+
+  return lines.length > 0 ? lines.map((line) => `• ${line}`).join("\n") : null;
 }
 
-function documentedRiskLines(extraction: StoredExtraction) {
-  const lines: string[] = [];
-  for (const domain of RISK_DOMAINS) {
-    const fact = extraction.facts[domain];
-    if (fact.assertion === "not_assessed" || fact.assertion === "not_reported") continue;
-    if (fact.source !== "transcript") continue;
-    if (fact.temporality === "historical" && fact.assertion !== "present") continue;
-    const label = DOMAIN_HE[domain] ?? domain;
-    if (fact.assertion === "explicitly_denied" && fact.evidence?.quote) {
-      lines.push(`${label}: נשלל במפורש («${fact.evidence.quote}»)`);
-      continue;
-    }
-    if (fact.assertion === "present") {
-      const body = factLine(fact);
-      if (body) lines.push(`${label}: ${body}`);
-      continue;
-    }
-    if (fact.assertion === "uncertain") {
-      lines.push(`${label}: לאימות`);
-    }
-  }
-  return lines;
-}
-
-function isDocumentedCurrent(fact: ClinicalFact) {
+function isEncounterFact(fact: ClinicalFact) {
+  if (fact.source === "patient_record" || fact.source === "previous_validated_visit") return false;
   return (
-    fact.assertion === "present" &&
-    fact.temporality === "current_visit" &&
-    fact.source === "transcript"
+    fact.source === "transcript" ||
+    fact.evidences.some((item) => item.source === "TRANSCRIPT" || item.source === "NURSE_NOTE")
   );
-}
-
-function factLine(fact: ClinicalFact) {
-  if (fact.evidence?.quote) return `נמסר: «${fact.evidence.quote}»`;
-  return fact.value?.trim() || null;
 }

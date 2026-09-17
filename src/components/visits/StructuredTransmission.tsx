@@ -57,10 +57,6 @@ export function StructuredTransmission({
     copied: string;
     copyWarn: string;
     validate: string;
-    regenerate: string;
-    shorten: string;
-    moreClinical: string;
-    correctHebrew: string;
     saved: string;
     lost: string;
     help: string;
@@ -101,6 +97,41 @@ export function StructuredTransmission({
   ].join("\u0001");
   const fieldClass = `min-h-40 w-full rounded-2xl bg-field px-3 py-3 text-base leading-7 text-ink outline-none ${BIDI_TEXT_CLASS}`;
   const fullClass = `min-h-56 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)] outline-none ${BIDI_TEXT_CLASS}`;
+
+  useEffect(() => {
+    const snapshot = {
+      visitId,
+      status,
+      validated,
+      durationMinutes: duration,
+      patientStatusNote: structured.patientStatusNote || "(vide)",
+      drivingRisk: structured.drivingRisk,
+      diagnosisNote: structured.diagnosisNote || "(vide)",
+      mainProblems: structured.mainProblems || "(vide)",
+      currentMedication: structured.currentMedication || "(vide)",
+      interventionsProvided: structured.interventionsProvided || "(vide)",
+      carePlan: structured.carePlan || "(vide)",
+      finalReportHe: text || "(vide)",
+      lengths: {
+        patientStatusNote: structured.patientStatusNote.length,
+        diagnosisNote: structured.diagnosisNote.length,
+        mainProblems: structured.mainProblems.length,
+        currentMedication: structured.currentMedication.length,
+        interventionsProvided: structured.interventionsProvided.length,
+        carePlan: structured.carePlan.length,
+        finalReportHe: text.length,
+      },
+    };
+    console.info("[Synapse Transmission] champs structurés", snapshot);
+    console.info("[Synapse Transmission] patientStatusNote:\n", structured.patientStatusNote || "(vide)");
+    console.info("[Synapse Transmission] drivingRisk:", structured.drivingRisk);
+    console.info("[Synapse Transmission] diagnosisNote:\n", structured.diagnosisNote || "(vide)");
+    console.info("[Synapse Transmission] mainProblems:\n", structured.mainProblems || "(vide)");
+    console.info("[Synapse Transmission] currentMedication:\n", structured.currentMedication || "(vide)");
+    console.info("[Synapse Transmission] interventionsProvided:\n", structured.interventionsProvided || "(vide)");
+    console.info("[Synapse Transmission] carePlan:\n", structured.carePlan || "(vide)");
+    console.info("[Synapse Transmission] finalReportHe (transmission complète):\n", text || "(vide)");
+  }, [visitId, status, validated, duration, structured, text]);
 
   useEffect(() => {
     setText(initialText);
@@ -248,6 +279,10 @@ export function StructuredTransmission({
             empty={labels.emptySection}
             locked={validated}
             fieldClass={fieldClass}
+            copyLabel={labels.copyBlock}
+            copied={copiedKey === "patientStatus"}
+            copiedLabel={labels.copied}
+            onCopy={() => void copyBlock("patientStatus", structured.patientStatusNote)}
             onChange={(value) => updateField("patientStatusNote", value)}
           />
 
@@ -333,7 +368,18 @@ export function StructuredTransmission({
       </>
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-ink">{labels.fullTransmission}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink">{labels.fullTransmission}</h2>
+          {text.trim() ? (
+            <button
+              type="button"
+              onClick={() => void copyBlock("full", text)}
+              className="rounded-xl border border-line/70 px-3 py-1.5 text-xs font-medium text-ink"
+            >
+              {copiedKey === "full" ? labels.copied : labels.copy}
+            </button>
+          ) : null}
+        </div>
         {validated ? (
           <BidiRichText text={text} className={fullClass} />
         ) : (
@@ -356,15 +402,6 @@ export function StructuredTransmission({
               {labels.validate}
             </button>
           </form>
-        </div>
-      )}
-
-      {validated ? null : (
-        <div className="flex flex-col gap-2">
-          <ActionForm visitId={visitId} action="regenerate" label={labels.regenerate} />
-          <ActionForm visitId={visitId} action="shorten" label={labels.shorten} />
-          <ActionForm visitId={visitId} action="more_clinical" label={labels.moreClinical} />
-          <ActionForm visitId={visitId} action="correct_hebrew" label={labels.correctHebrew} />
         </div>
       )}
       <p className="sr-only">{status}</p>
@@ -428,22 +465,5 @@ function Section({
         />
       )}
     </SurfaceCard>
-  );
-}
-
-function ActionForm({ visitId, action, label }: { visitId: string; action: string; label: string }) {
-  return (
-    <form action={`/api/visits/${visitId}/report/actions`} method="post">
-      <input type="hidden" name="action" value={action} />
-      <ActionButton label={label} />
-    </form>
-  );
-}
-
-function ActionButton({ label }: { label: string }) {
-  return (
-    <button type="submit" className="min-h-11 w-full rounded-2xl bg-surface text-sm font-semibold text-ink">
-      {label}
-    </button>
   );
 }

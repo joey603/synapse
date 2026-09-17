@@ -1,10 +1,10 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { selectHistory, type HistoryMode } from "@/lib/ai/clinical-history";
 
-const HISTORY_LIMIT = 24000;
-
-export type HistoryMode = "all_validated";
+export type { HistoryMode };
+export { selectHistory };
 
 export async function loadVisitContext(patientId: string, visitId: string) {
   const patient = await db.patient.findUnique({
@@ -16,6 +16,7 @@ export async function loadVisitContext(patientId: string, visitId: string) {
       firstName: true,
       lastName: true,
       birthDate: true,
+      sex: true,
       primaryDiagnosis: true,
       secondaryDiagnoses: true,
       currentSummary: true,
@@ -59,8 +60,10 @@ export async function loadVisitContext(patientId: string, visitId: string) {
   );
 
   const lines = [
-    "PATIENT",
+    `PATIENT_ID=${patientId}`,
+    "=== PATIENT (dossier permanent de CE patient uniquement) ===",
     `Identité: ${patient.firstName} ${patient.lastName}.`,
+    grammaticalSexLine(patient.sex),
     line("Diagnostic enregistré", patient.primaryDiagnosis),
     line("Diagnostics associés", patient.secondaryDiagnoses),
     line("Résumé clinique du dossier", patient.currentSummary),
@@ -69,7 +72,8 @@ export async function loadVisitContext(patientId: string, visitId: string) {
     line("Facteurs de risque du dossier", patient.riskFactors),
     line("Facteurs protecteurs du dossier", patient.protectiveFactors),
     "",
-    "TRAITEMENT ENREGISTRÉ — RÉFÉRENCE DU DOSSIER, PAS UN CONSTAT DU JOUR",
+    "=== AUTHORITATIVE TREATMENT (référence dossier CE patient — pas un constat du jour) ===",
+    "N’invente aucune medicationDiscrepancy à partir de cette liste si le médicament n’est pas nommé dans la transcription / notes actuelles.",
     patient.medications.length
       ? patient.medications
           .map((item) =>
@@ -87,10 +91,12 @@ export async function loadVisitContext(patientId: string, visitId: string) {
       : "Aucun médicament enregistré.",
     line("Note de traitement", patient.currentTreatmentNote),
     "",
-    "HISTORIQUE — TRANSMISSIONS VALIDÉES UNIQUEMENT. NE PAS LES TRAITER COMME LE CONSTAT D’AUJOURD’HUI.",
+    "=== VALIDATED HISTORY (transmissions VALIDATED de CE patient uniquement) ===",
+    "Contexte d’évolution seulement. NE PAS traiter comme constat d’aujourd’hui. Interdit de réutiliser un médicament historique comme divergence du jour sans mention actuelle.",
     history.text || "Aucune transmission validée.",
     "",
-    "VISITE ACTUELLE — SEULE SOURCE POUR AFFIRMER CE QUI EST RAPPORTÉ, NIÉ, OBSERVÉ OU ÉVALUÉ AUJOURD’HUI.",
+    "=== CURRENT VISIT (métadonnées + Nurse Note ; la transcription suit séparément) ===",
+    "Seule source, avec la transcription, pour affirmer ce qui est rapporté, nié, observé ou évalué aujourd’hui.",
     visit
       ? `Date: ${visit.occurredAt.toISOString().slice(0, 10)}. Type: ${visit.type}.`
       : null,
@@ -103,26 +109,30 @@ export async function loadVisitContext(patientId: string, visitId: string) {
   };
 }
 
-export function selectHistory(
-  reports: Array<{ text: string; at: Date; type: string }>,
-  mode: HistoryMode,
-) {
-  if (mode !== "all_validated") return { text: "", omitted: 0 };
-  const ordered = [...reports].sort((a, b) => a.at.getTime() - b.at.getTime());
-  const kept: string[] = [];
-  let used = 0;
-  let omitted = 0;
-  for (const report of [...ordered].reverse()) {
-    const block = `HISTORIQUE ${report.at.toISOString().slice(0, 10)} (${report.type})\n${report.text.trim()}`;
-    if (used + block.length > HISTORY_LIMIT && kept.length > 0) {
-      omitted += 1;
-      continue;
-    }
-    kept.push(block);
-    used += block.length;
+function grammaticalSexLine(sex: string) {
+  if (sex === "MALE") {
+    return [
+      "Sexe enregistré (dossier Patient.sex): MALE",
+      "GENRE GRAMMATICAL OBLIGATOIRE: masculin uniquement (המטופל, הוא, אמר, מסר, תיאר, נוטל, היה).",
+      "INTERDIT: המטופלת, היא, אמרה, תיארה, et toute forme barrée המטופל/ת / מסר/ה / תיאר/ה / נוטל/ת.",
+      "Ne pas inférer le genre depuis le prénom, la transcription, les partenaires mentionnés, ni l’historique textuel.",
+    ].join("\n");
   }
-  const note = omitted > 0 ? `Des transmissions validées plus anciennes ont été omises (${omitted}).\n` : "";
-  return { text: note + kept.reverse().join("\n\n"), omitted };
+  if (sex === "FEMALE") {
+    return [
+      "Sexe enregistré (dossier Patient.sex): FEMALE",
+      "GENRE GRAMMATICAL OBLIGATOIRE: féminin uniquement (המטופלת, היא, אמרה, מסרה, תיארה, נוטלת, הייתה).",
+      "INTERDIT: המטופל (masculin), הוא, אמר, תיאר, et toute forme barrée המטופל/ת / מסר/ה / תיאר/ה / נוטל/ת.",
+      "Ne pas inférer le genre depuis le prénom, la transcription, les partenaires mentionnés, ni l’historique textuel.",
+    ].join("\n");
+  }
+  return [
+    `Sexe enregistré (dossier Patient.sex): ${sex}`,
+    "GENRE GRAMMATICAL: sexe non précisé dans le dossier — formulations masculines génériques cliniques PLEINES (המטופל, מסר, תיאר, נוטל).",
+    "INTERDIT ABSOLU: המטופל/ת, מסר/ה, תיאר/ה, נוטל/ת, וא/ה, מצדו/ה (formes barrées).",
+    "Interdit d’inférer un genre depuis le prénom, la transcription, les partenaires mentionnés, ou l’historique textuel.",
+    "Interdit de féminiser automatiquement (המטופלת) sans Patient.sex=FEMALE.",
+  ].join("\n");
 }
 
 function line(label: string, value: string | null | undefined) {

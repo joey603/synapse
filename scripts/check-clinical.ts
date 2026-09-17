@@ -270,6 +270,23 @@ if (!corrected.replaced || /שולל מחשבות אובדני/.test(corrected.t
   throw new Error("case hebrew extra denial was not corrected");
 }
 
+{
+  const silencePsychosis =
+    "המטופל שיתף פעולה. לא עלו תכנים פסיכוטיים. לא תוארו תכנים דלוזיונליים ולא דווחו הזיות. המשך מעקב.";
+  const source = validateExtraction({ facts: { mood: evidenced("present", "יציב") } }, "יציב");
+  if (!source) throw new Error("psychosis silence fixture invalid");
+  if (source.facts.psychosis.assertion === "explicitly_denied") {
+    throw new Error("psychosis should remain not assessed");
+  }
+  const scrubbed = scrubForbidden(silencePsychosis, source);
+  if (/פסיכוטיים|דלוזיונליים|הזיות/.test(scrubbed.text)) {
+    throw new Error("psychosis silence clauses were not removed");
+  }
+  if (!/שיתף פעולה/.test(scrubbed.text) || !/המשך מעקב/.test(scrubbed.text)) {
+    throw new Error("psychosis scrub removed unrelated clinical text");
+  }
+}
+
 const times = "la semaine dernière j’étais très triste. aujourd’hui je vais mieux";
 const temporality = validateExtraction(
   {
@@ -498,6 +515,59 @@ if (!detReport.includes("600") || !detReport.includes("900")) {
 }
 if (!detReport.includes("הקשבה פעילה") || !detReport.includes("המשך מעקב")) {
   throw new Error("deterministic report lost validated interventions/plan");
+}
+
+{
+  const denial = "היום לא היה לי מחשבות אובדניות";
+  const coherent = validateExtraction(
+    {
+      facts: {
+        suicidality: {
+          assertion: "explicitly_denied",
+          value: null,
+          confidence: "high",
+          evidences: [proof(denial)],
+        },
+      },
+      pointsToVerify: [
+        "יש לוודא מחדש מצב אובדנות היום, מאחר שלא נמסרה שלילה מפורשת של מחשבות אובדניות בתיעוד הנוכחי.",
+        "מעקב שינה",
+      ],
+    },
+    denial,
+  );
+  if (!coherent) throw new Error("suicidality coherence fixture invalid");
+  if (coherent.pointsToVerify.some((item) => /לא נמסרה שלילה/.test(item))) {
+    throw new Error("explicit denial left incompatible suicidality pointToVerify");
+  }
+  if (!coherent.pointsToVerify.includes("מעקב שינה")) {
+    throw new Error("unrelated pointToVerify was dropped");
+  }
+}
+
+{
+  const talk =
+    "חשבתי שהקשר משמעותי והצד השני מעוניין. אחר כך הקשר הסתיים לאחר תגובה תוקפנית.";
+  const soft = validateExtraction(
+    {
+      contradictions: [
+        {
+          kind: "other",
+          summary:
+            "קיימת סתירה בין תחושת המטופל שהקשר היה משמעותי והצד השני מעוניין, לבין העובדה שהקשר הסתיים לאחר תגובה תוקפנית.",
+          evidence: [
+            proof("חשבתי שהקשר משמעותי והצד השני מעוניין"),
+            proof("אחר כך הקשר הסתיים לאחר תגובה תוקפנית"),
+          ],
+        },
+      ],
+    },
+    talk,
+  );
+  if (!soft) throw new Error("relational non-contradiction fixture invalid");
+  if (soft.contradictions.length > 0) {
+    throw new Error("temporal/perception relational evolution kept as contradiction");
+  }
 }
 
 console.info("clinical checks ok");

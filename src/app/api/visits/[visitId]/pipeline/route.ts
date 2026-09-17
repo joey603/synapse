@@ -52,5 +52,7 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
   }
 
   void startPipeline(visit.id, session.user.id, mode).catch(() => logger.error("pipeline.failed"));
-  return NextResponse.redirect(appUrl(request, `${back}?run=1&tab=${mode === "analyze" ? "analysis" : "transcript"}`), 303);
+  // Pipeline complet (transcribe) et ré-analyse aboutissent à la transmission.
+  const tab = mode === "analyze" ? "analysis" : "report";
+  return NextResponse.redirect(appUrl(request, `${back}?run=1&tab=${tab}`), 303);
 }

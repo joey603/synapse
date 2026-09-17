@@ -9,15 +9,24 @@ export type TranscribeResult = {
 
 export type RewriteAction = "shorten" | "more_clinical" | "correct_hebrew";
 
+export type WriteReportInput = {
+  extraction: StoredExtraction;
+  transcript?: string;
+  nurseNotes?: string | null;
+  context?: string;
+  visitType?: VisitType;
+  occurredAt?: Date;
+  patientName?: string;
+};
+
 export interface TranscriptionProvider {
   transcribe(input: { audio: Buffer; mimeType: string; filename: string | null }): Promise<TranscribeResult>;
 }
 
 export interface ClinicalLanguageProvider {
   extract(input: { transcript: string; context: string }): Promise<unknown>;
-  writeReport(input: { extraction: StoredExtraction }): Promise<{ text: string; model: string }>;
-  generateReport(input: {
-    extraction: StoredExtraction;
+  writeReport(input: WriteReportInput): Promise<{ text: string; model: string }>;
+  generateReport(input: WriteReportInput & {
     visitType: VisitType;
     occurredAt: Date;
     patientName: string;

@@ -24,13 +24,21 @@ export const fakeClinical: ClinicalLanguageProvider = {
   async writeReport(input) {
     return this.generateReport({
       extraction: input.extraction,
-      visitType: "IN_PERSON",
-      occurredAt: new Date(),
-      patientName: "",
+      visitType: input.visitType ?? "IN_PERSON",
+      occurredAt: input.occurredAt ?? new Date(),
+      patientName: input.patientName ?? "",
+      transcript: input.transcript,
+      nurseNotes: input.nurseNotes,
+      context: input.context,
     });
   },
   async generateReport(input) {
-    const composed = composeReport(input);
+    const composed = composeReport({
+      extraction: input.extraction,
+      visitType: input.visitType,
+      occurredAt: input.occurredAt,
+      patientName: input.patientName,
+    });
     return { text: scrubForbidden(composed, input.extraction).text, model: "fake-report" };
   },
   async rewrite({ text, action, extraction }) {

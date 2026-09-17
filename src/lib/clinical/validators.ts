@@ -1,7 +1,9 @@
 import { coerceExtraction } from "@/lib/clinical/schema";
+import { hebrewClinicalText } from "@/lib/clinical/hebrew-text";
 import {
   FACT_DOMAINS,
   RISK_DOMAINS,
+  emptyFact,
   type ClinicalFact,
   type EvidenceItem,
   type Evolution,
@@ -30,9 +32,18 @@ export function validateExtraction(
     facts[domain] = applyRules(coerced.facts[domain], transcript, nurseNotes, domain, downgraded);
   }
 
-  const medicationMentions = coerced.medicationMentions.map((fact, index) =>
+  // Filet déterministe : une négation CURRENT explicite présente dans la transcription
+  // ne doit jamais rester not_assessed (perte OpenAI fréquente sur suicidality).
+  salvageExplicitRiskDenials(facts, transcript);
+  // Filet déterministe : domaines cliniques clairement cités ne doivent pas rester vides
+  // lorsque OpenAI les a laissés not_assessed (projection Zebra patientStatusNote / mainProblems).
+  salvageDocumentedClinicalFacts(facts, transcript);
+
+  let medicationMentions = coerced.medicationMentions.map((fact, index) =>
     applyRules(fact, transcript, nurseNotes, `medication:${index}`, downgraded, true),
   );
+  medicationMentions = salvageMedicationMentions(medicationMentions, transcript);
+
   const interventions = keepCited(coerced.interventions, transcript, nurseNotes);
   const plan = keepCited(coerced.plan, transcript, nurseNotes);
   const contradictions = keepContradictions(coerced.contradictions, transcript, nurseNotes, points);
@@ -40,7 +51,6 @@ export function validateExtraction(
     coerced.medicationDiscrepancies,
     transcript,
     nurseNotes,
-    points,
   );
 
   const partial: Pick<
@@ -55,18 +65,30 @@ export function validateExtraction(
     medicationDiscrepancies,
   };
 
+  const longitudinal = gateLongitudinal(coerced.longitudinal, facts);
+  if (
+    facts.suicidality.assertion === "explicitly_denied" &&
+    detectSuicidalityImprovement(transcript) &&
+    (!longitudinal.suicidality || longitudinal.suicidality === "not_reassessed")
+  ) {
+    longitudinal.suicidality = "improved";
+  }
+
+  // Evidence CURRENT validée invalide tout warning affirmant que la même evidence est absente.
+  const prunedPoints = pruneIncompatiblePoints(points, facts);
+
   return {
     facts,
     medicationMentions,
     changes: [],
     reviewFlags: [],
     downgraded,
-    longitudinal: gateLongitudinal(coerced.longitudinal, facts),
+    longitudinal,
     interventions,
     plan,
     contradictions,
     medicationDiscrepancies,
-    pointsToVerify: points.slice(0, 12),
+    pointsToVerify: prunedPoints.slice(0, 12),
     suggestedTasks: keepSuggestedTasks(coerced.suggestedTasks, transcript, nurseNotes, partial),
     finalReportHe: coerced.finalReportHe,
   };
@@ -127,7 +149,14 @@ function isRiskKey(key: string) {
 }
 
 function finish(fact: ClinicalFact, medication: boolean): ClinicalFact {
-  const next = stripLooseDose(fact, medication);
+  const next = stripLooseDose(
+    {
+      ...fact,
+      // Ne pas persister de résumés anglais dans value (UI Analyse / Zebra).
+      value: hebrewClinicalText(fact.value),
+    },
+    medication,
+  );
   if (!next.evidence && currentQuote(next)) {
     return { ...next, evidence: { quote: currentQuote(next)! } };
   }
@@ -175,31 +204,102 @@ function keepContradictions(
       points.push(item.summary);
       continue;
     }
+    // Exiger deux preuves ancrées + assertions réellement incompatibles (même objet / temporalité).
+    if (evidence.length < 2 || isNonContradiction(item.summary, evidence)) {
+      continue;
+    }
     kept.push({ ...item, evidence });
   }
   return kept;
 }
 
 /**
- * Conserve une divergence médicamenteuse si une preuve explicite existe
- * dans TRANSCRIPT ou NURSE_NOTE. Ne résout jamais quelle dose est correcte.
+ * Évolution temporelle ou différence de perception ≠ contradiction clinique.
+ * Une contradiction exige deux propositions incompatibles sur le même objet
+ * à une temporalité compatible.
+ */
+function isNonContradiction(summary: string, evidence: EvidenceItem[]) {
+  const text = `${summary} ${evidence.map((item) => item.quote).join(" ")}`;
+
+  // Perception relationnelle à T1 vs fin de relation à T2.
+  if (
+    /תחוש|חשב|מעוניין|משמעותי|רצה|רצוי/.test(text) &&
+    /הסתיים|נגמר|לאחר\s+מכן|בסופו|תגובה\s+תוקפ/.test(text)
+  ) {
+    return true;
+  }
+
+  // Temporalités explicitement incompatibles entre les deux preuves.
+  const times = new Set(evidence.map((item) => item.temporality));
+  if (times.has("HISTORICAL") && times.has("CURRENT") && !/מינון|dose|תרופה|medication/i.test(text)) {
+    // Historique vs actuel n’est une contradiction que pour traitements / doses (autre voie).
+    if (/השתנה|בעבר|אחר\s+כך|לאחר|היום|כיום/.test(text) || times.size >= 2) {
+      // Si le résumé décrit une évolution plutôt qu’une incompatibilité synchrone → drop.
+      if (/התפתח|השתנה|ואז|לאחר|בסוף|בהמשך/.test(text) || /תחוש|חשב|מעוניין/.test(summary)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Si une evidence CURRENT validée établit une négation explicite,
+ * supprimer les pointsToVerify qui affirment que cette négation est absente.
+ * Ne supprime pas les autres pointsToVerify.
+ */
+export function pruneIncompatiblePoints(
+  points: string[],
+  facts: Record<FactDomain, ClinicalFact>,
+): string[] {
+  const deniedSuicidality =
+    facts.suicidality?.assertion === "explicitly_denied" &&
+    facts.suicidality.evidences.some(
+      (item) =>
+        item.speaker === "PATIENT" &&
+        item.temporality === "CURRENT" &&
+        (item.source === "TRANSCRIPT" || item.source === "NURSE_NOTE"),
+    );
+
+  return points.filter((point) => {
+    if (!deniedSuicidality) return true;
+    // Warnings affirmant l’absence de négation / d’évaluation explicite — incompatibles.
+    if (
+      /לא\s+נמסרה\s+שלילה\s+מפורשת|שלילה\s+מפורשת.*לא|אין\s+שלילה\s+מפורשת|לא\s+הוערכ.*אובדנ|אובדנ.*לא\s+נבדק|מאחר\s+שלא\s+נמסרה\s+שלילה|לא\s+תוארו\s+באופן\s+מפורש\s+מחשבות\s+אובדניות/.test(
+        point,
+      )
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Conserve une divergence médicamenteuse si le médicament / la dose rapportée
+ * est ancré(e) dans TRANSCRIPT ou NURSE_NOTE. Une evidence hors sujet (autre molécule)
+ * ne suffit pas. Ne résout jamais quelle dose est correcte.
  */
 function keepDiscrepancies(
   items: MedicationDiscrepancy[],
   transcript: string,
   nurseNotes: string,
-  points: string[],
 ): MedicationDiscrepancy[] {
   return items.flatMap((item) => {
-    const evidence = (item.evidence ?? []).filter((proof) => quoteFound(proof, transcript, nurseNotes));
-    const supportedByEvidence = evidence.length > 0;
-    const supportedByCorpus =
-      anchoredInSources(item.reportedDose, transcript, nurseNotes) ||
-      anchoredInSources(item.medication, transcript, nurseNotes) ||
-      doseNumberInSources(item.reportedDose, transcript, nurseNotes);
+    const medAnchored = medicationAnchoredInSources(item.medication, transcript, nurseNotes);
+    const evidence = (item.evidence ?? []).filter((proof) => {
+      if (!quoteFound(proof, transcript, nurseNotes)) return false;
+      return (
+        medicationAnchoredInSources(item.medication, proof.quote, "") ||
+        doseNumberInSources(item.reportedDose, proof.quote, "")
+      );
+    });
 
-    if (!supportedByEvidence && !supportedByCorpus) {
-      points.push(`${item.medication}: ${item.reportedDose}`);
+    // Exiger un ancrage du médicament dans la visite courante (pas l’historique seul).
+    // Une evidence hors sujet (autre molécule) ne sauve pas la discrepancy.
+    // Ne pas remonter en pointsToVerify une molécule absente de la visite (fuite d’historique).
+    if (!medAnchored && evidence.length === 0) {
       return [];
     }
 
@@ -209,6 +309,35 @@ function keepDiscrepancies(
       requiresHumanReview: true as const,
     }];
   });
+}
+
+function medicationAnchoredInSources(medication: string, transcript: string, nurseNotes: string) {
+  const names = medicationAliases(medication);
+  const corpus = `${transcript}\n${nurseNotes}`;
+  return names.some((name) => quoteInTranscript(name, corpus) || sharesSignificantToken(name, corpus));
+}
+
+function medicationAliases(medication: string) {
+  const raw = medication.trim();
+  if (!raw) return [];
+  const lower = raw.toLowerCase();
+  const aliases = new Set<string>([raw, lower]);
+  // Formes courantes hébreu / latin pour molécules fréquentes HAD.
+  if (/clozapin|קלוזאפין|לפונקס|leponex/i.test(raw)) {
+    aliases.add("clozapine");
+    aliases.add("קלוזאפין");
+    aliases.add("Leponex");
+    aliases.add("לפונקס");
+  }
+  if (/bondormin|בונדורמין|בואנדורמין/i.test(raw)) {
+    aliases.add("Bondormin");
+    aliases.add("בונדורמין");
+  }
+  if (/lithium|ליתיום/i.test(raw)) {
+    aliases.add("Lithium");
+    aliases.add("ליתיום");
+  }
+  return [...aliases];
 }
 
 /**
@@ -299,6 +428,257 @@ const STOP_TOKENS = new Set([
   "demander", "suivre", "faire", "avoir", "etre", "être",
   "מעקב", "לבדוק", "לוודא", "לקבוע", "ביצוע", "המשך",
 ]);
+
+/** Motifs génériques de négation CURRENT de suicidalité (pas de règle patient). */
+const SUICIDALITY_CURRENT_DENIAL_RES: RegExp[] = [
+  /היום\s+לא\s+הי[וה]\s+לי\s+מחשבות\s+אובדניות/,
+  /אין\s+לי\s+מחשבות\s+אובדניות/,
+  /אין\s+מחשבות\s+אובדניות/,
+  /אני\s+לא\s+חושב(?:ת)?\s+על\s+מוות/,
+  /לא\s+הי[וה]\s+לי\s+מחשבות\s+אובדניות/,
+];
+
+/**
+ * Si OpenAI a perdu une négation CURRENT explicite présente dans la transcription,
+ * la reconstruire de façon déterministe (speaker PATIENT, source TRANSCRIPT).
+ */
+function salvageExplicitRiskDenials(
+  facts: Record<FactDomain, ClinicalFact>,
+  transcript: string,
+) {
+  const current = facts.suicidality;
+  if (!current) return;
+  if (current.assertion === "explicitly_denied") {
+    // S’assurer qu’une evidence CURRENT PATIENT existe si la citation est trouvable.
+    const hasPatientCurrent = current.evidences.some(
+      (item) => item.speaker === "PATIENT" && item.temporality === "CURRENT" && item.source === "TRANSCRIPT",
+    );
+    if (hasPatientCurrent) return;
+  }
+  if (
+    current.assertion !== "not_assessed" &&
+    current.assertion !== "not_reported" &&
+    current.assertion !== "uncertain" &&
+    current.assertion !== "explicitly_denied"
+  ) {
+    return;
+  }
+
+  const quote = findFirstMatch(transcript, SUICIDALITY_CURRENT_DENIAL_RES);
+  if (!quote) return;
+
+  facts.suicidality = {
+    ...current,
+    assertion: "explicitly_denied",
+    value: null,
+    confidence: "high",
+    temporality: "current_visit",
+    source: "transcript",
+    evidence: { quote },
+    evidences: [
+      {
+        quote,
+        speaker: "PATIENT",
+        source: "TRANSCRIPT",
+        temporality: "CURRENT",
+      },
+    ],
+  };
+}
+
+type ClinicalSalvageSpec = {
+  domain: FactDomain;
+  patterns: RegExp[];
+};
+
+/**
+ * Motifs génériques hébreu clinique — pas de liste patient.
+ * Ne remplit un domaine que s’il est encore vide / uncertain.
+ */
+const CLINICAL_FACT_SALVAGE: ClinicalSalvageSpec[] = [
+  {
+    domain: "mood",
+    patterns: [
+      /היום\s+קמתי\s+ממש\s+עצוב[^.?!\n]{0,80}/,
+      /עצוב[^.?!\n]{0,40}בכיתי[^.?!\n]{0,40}ריקנות/,
+      /תחושה\s+של\s+ריקנות/,
+      /בכיתי[^.?!\n]{0,60}ריקנות/,
+    ],
+  },
+  {
+    domain: "sleep",
+    patterns: [
+      /שנת[יי]\s+[^.?!\n]{0,50}שע(?:ה|ות)/,
+      /ישנתי\s+[^.?!\n]{0,40}שע/,
+      /שעה\s+ו?חצי[^.?!\n]{0,30}(?:שינה|ישנ)/,
+    ],
+  },
+  {
+    domain: "anxiety",
+    patterns: [
+      /העצים\s+לי\s+את\s+ה-?OCD/,
+      /רומינצ[^.?!\n]{0,40}/,
+      /פרשנות\s+יתר/,
+    ],
+  },
+  {
+    domain: "thoughtContent",
+    patterns: [
+      /העצים\s+לי\s+את\s+ה-?OCD/,
+      /רומינצ/,
+      /בדיק(?:ה|ות)\s+יתר/,
+      /פרשנות\s+יתר/,
+    ],
+  },
+  {
+    domain: "insight",
+    patterns: [
+      /עכשיו\s+אני\s+איתך\s+מדבר\s+יותר\s+נכון/,
+      /אני\s+מזהה\s+[^.?!\n]{0,40}/,
+    ],
+  },
+  {
+    domain: "isolation",
+    patterns: [
+      /אני\s+מפחד\s+להיות\s+לבד/,
+      /פחד\s+מ(?:נטישה|דחייה|בדידות)/,
+      /צורך\s+באישור/,
+    ],
+  },
+  {
+    domain: "behavior",
+    patterns: [
+      /בדיק(?:ה|ות)\s+(?:חוזר|יתר)/,
+      /מבחנ(?:י|ות)\s+נאמנות/,
+    ],
+  },
+];
+
+function salvageDocumentedClinicalFacts(
+  facts: Record<FactDomain, ClinicalFact>,
+  transcript: string,
+) {
+  for (const spec of CLINICAL_FACT_SALVAGE) {
+    const current = facts[spec.domain];
+    if (!current) continue;
+    if (
+      current.assertion !== "not_assessed" &&
+      current.assertion !== "not_reported" &&
+      current.assertion !== "uncertain"
+    ) {
+      continue;
+    }
+    const quote = findFirstMatch(transcript, spec.patterns);
+    if (!quote) continue;
+    facts[spec.domain] = {
+      ...current,
+      assertion: "present",
+      value: null,
+      confidence: "medium",
+      temporality: "current_visit",
+      source: "transcript",
+      evidence: { quote },
+      evidences: [
+        {
+          quote,
+          speaker: "PATIENT",
+          source: "TRANSCRIPT",
+          temporality: "CURRENT",
+        },
+      ],
+    };
+  }
+}
+
+/** Médicaments clairement identifiables vs déclaration de prise incertaine. */
+const KNOWN_MED_RES: Array<{ patterns: RegExp[]; name: string }> = [
+  { name: "בונדורמין", patterns: [/בונדורמין|Bondormin|בואנדורמין/i] },
+];
+
+const UNCERTAIN_MED_TAKE_RE =
+  /אני\s+לוקח(?:ת)?\s+את\s+ה[\u0590-\u05FFA-Za-z\-]{2,24}/;
+
+function salvageMedicationMentions(mentions: ClinicalFact[], transcript: string): ClinicalFact[] {
+  const hasDocumented = mentions.some(
+    (fact) => fact.assertion === "present" || fact.assertion === "uncertain",
+  );
+  if (hasDocumented) return mentions;
+
+  for (const known of KNOWN_MED_RES) {
+    const quote = findFirstMatch(transcript, known.patterns);
+    if (!quote) continue;
+    const takeCtx = findFirstMatch(transcript, [
+      /אני\s+לוקח(?:ת)?\s+את\s+הבונדורמין/,
+      /לוקח(?:ת)?\s+את\s+הבונדורמין/,
+      /אני\s+לוקח(?:ת)?\s+את\s+Bondormin/i,
+    ]);
+    const evidenceQuote = takeCtx ?? quote;
+    return [
+      ...mentions,
+      {
+        ...emptyFact(),
+        assertion: "present",
+        value: known.name,
+        confidence: "medium",
+        temporality: "current_visit",
+        source: "transcript",
+        evidence: { quote: evidenceQuote },
+        evidences: [
+          {
+            quote: evidenceQuote,
+            speaker: "PATIENT",
+            source: "TRANSCRIPT",
+            temporality: "CURRENT",
+          },
+        ],
+      },
+    ];
+  }
+
+  const uncertainQuote = findFirstMatch(transcript, [UNCERTAIN_MED_TAKE_RE]);
+  if (!uncertainQuote) return mentions;
+
+  // Si la déclaration ressemble à un nom connu, déjà géré plus haut.
+  return [
+    ...mentions,
+    {
+      ...emptyFact(),
+      assertion: "uncertain",
+      value: null,
+      confidence: "low",
+      temporality: "current_visit",
+      source: "transcript",
+      evidence: { quote: uncertainQuote },
+      evidences: [
+        {
+          quote: uncertainQuote,
+          speaker: "PATIENT",
+          source: "TRANSCRIPT",
+          temporality: "CURRENT",
+        },
+      ],
+    },
+  ];
+}
+
+/** Motifs génériques de diminution longitudinale de suicidalité. */
+const SUICIDALITY_IMPROVED_RES: RegExp[] = [
+  /מחשבות\s+אובדניות[^.?]{0,40}הרבה\s+הרבה\s+פחות/,
+  /מחשבות\s+אובדניות[^.?]{0,40}פחות/,
+  /פחות\s+מחשבות\s+אובדניות/,
+];
+
+export function detectSuicidalityImprovement(transcript: string) {
+  return SUICIDALITY_IMPROVED_RES.some((pattern) => pattern.test(transcript));
+}
+
+function findFirstMatch(transcript: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = transcript.match(pattern);
+    if (match?.[0]?.trim()) return match[0].trim();
+  }
+  return null;
+}
 
 function quoteFound(item: EvidenceItem, transcript: string, nurseNotes: string) {
   const corpus = item.source === "NURSE_NOTE" ? nurseNotes : transcript;

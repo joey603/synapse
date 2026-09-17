@@ -7,7 +7,7 @@ import { getClinicalProvider, getTranscriptionProvider, providerName } from "@/l
 import { audit } from "@/lib/audit";
 import { diffValidated } from "@/lib/clinical/diff";
 import { buildDeterministicHebrewReport } from "@/lib/clinical/compose-report";
-import { hebrewNeedsRewrite, scrubForbidden } from "@/lib/clinical/forbidden-phrases";
+import { scrubForbidden } from "@/lib/clinical/forbidden-phrases";
 import { reviewFlags } from "@/lib/clinical/review-flags";
 import { composeStructuredSections } from "@/lib/clinical/structured-report";
 import { validateExtraction } from "@/lib/clinical/validators";
@@ -16,7 +16,7 @@ import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { getStorage } from "@/lib/storage";
 import { PROMPT_VERSION as EXTRACTION_PROMPT } from "../../../prompts/clinical-extraction";
-import { PROMPT_VERSION as REPORT_PROMPT } from "../../../prompts/nursing-report-he";
+import { CLINICAL_REPORT_PROMPT_VERSION as REPORT_PROMPT } from "../../../prompts/clinical-report";
 
 const running = new Set<string>();
 
@@ -43,17 +43,26 @@ async function runPipeline(visitId: string, actorId: string, mode: "transcribe" 
   if (visit.report?.status === "VALIDATED") return;
 
   try {
-    if (mode === "transcribe") {
-      if (!visit.transcript) await transcribe(visit, actorId);
-      return;
+    // mode=transcribe : transcription → analyse → transmission (pipeline complet).
+    // mode=analyze : repart de la transcription existante (ré-analyse / régénération).
+    let current = visit;
+    if (mode === "transcribe" && !current.transcript) {
+      await transcribe(current, actorId);
+      const reloaded = await reload(visitId);
+      if (!reloaded?.transcript) return;
+      current = reloaded;
     }
 
-    const ready = visit.transcript ? visit : await reload(visitId);
-    if (!ready?.transcript) return;
-    if (ready.extraction) {
+    if (!current.transcript) {
+      const ready = await reload(visitId);
+      if (!ready?.transcript) return;
+      current = ready;
+    }
+
+    if (current.extraction) {
       await db.clinicalExtraction.delete({ where: { visitId } });
     }
-    if (ready.report?.aiDraft) {
+    if (current.report?.aiDraft) {
       await db.clinicalReport.update({
         where: { visitId },
         data: { aiDraft: null },
@@ -258,6 +267,15 @@ async function generate(
     secondary: visit.patient.secondaryDiagnoses,
   };
 
+  // Projection Zebra AVANT la rédaction narrative — source = JSON validé (pas finalReportHe).
+  const structured = composeStructuredSections({
+    extraction,
+    visitType: visit.type,
+    diagnosis,
+    medications: meds,
+    sex: visit.patient.sex,
+  });
+
   let text: string;
   let model: string;
   try {
@@ -269,13 +287,6 @@ async function generate(
   }
 
   if (!text.trim()) throw new Error("generation_failed");
-
-  const structured = composeStructuredSections({
-    extraction,
-    visitType: visit.type,
-    diagnosis,
-    medications: meds,
-  });
 
   await db.clinicalReport.update({
     where: { visitId: visit.id },
@@ -330,18 +341,27 @@ async function draftHebrew(
     return { text: fallback(), model: "fake-report" };
   }
 
-  const proposed = extraction.finalReportHe?.trim() ?? "";
-  const first = proposed ? scrubForbidden(proposed, extraction) : null;
-  if (!hebrewNeedsRewrite(extraction, proposed) && first) {
-    return { text: first.text, model: "validated-json" };
+  // Transmission clinique complète (clinical-report-v*) depuis transcription + contexte patient.
+  // Les champs Zebra restent projetés séparément ; on ne raccourcit plus le récit via projection.
+  const context = await loadVisitContext(visit.patientId, visit.id);
+  try {
+    const written = await getClinicalProvider().writeReport({
+      extraction,
+      transcript: visit.transcript?.rawText ?? "",
+      nurseNotes: visit.notes,
+      context: context.text,
+      visitType: visit.type,
+      occurredAt: visit.occurredAt,
+      patientName: `${visit.patient.firstName} ${visit.patient.lastName}`.trim(),
+    });
+    const scrubbed = scrubForbidden(written.text, extraction);
+    if (scrubbed.text.trim()) {
+      return { text: scrubbed.text, model: written.model };
+    }
+  } catch {
+    // fallback déterministe ci-dessous
   }
 
-  const rewritten = await getClinicalProvider().writeReport({ extraction });
-  const second = scrubForbidden(rewritten.text, extraction);
-  if (!second.replaced && second.text.trim()) {
-    return { text: second.text, model: rewritten.model };
-  }
-  // Contrôle de sécurité échoué → projection déterministe uniquement.
   return { text: fallback(), model: "deterministic-fallback" };
 }
 

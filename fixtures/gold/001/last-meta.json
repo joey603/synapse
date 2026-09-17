@@ -1,0 +1,20 @@
+{
+  "id": "gold-case-001",
+  "promptVersion": "clinical-report-v1.3",
+  "model": "gpt-5.4-mini",
+  "length": 4367,
+  "missing": [],
+  "invented": [],
+  "ok": true,
+  "sexFromRecord": "MALE",
+  "suicidalityTrace": {
+    "beforeAssertion": "not_assessed",
+    "afterAssertion": "explicitly_denied",
+    "speaker": "PATIENT",
+    "source": "TRANSCRIPT",
+    "temporality": "CURRENT",
+    "quote": "היום לא היה לי מחשבות אובדניות",
+    "lossStage": "OpenAI extraction (salvaged by deterministic validator)"
+  },
+  "generatedAt": "2026-09-17T10:12:36.890Z"
+}

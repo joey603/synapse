@@ -1,0 +1,9 @@
+{
+  "beforeAssertion": "not_assessed",
+  "afterAssertion": "explicitly_denied",
+  "speaker": "PATIENT",
+  "source": "TRANSCRIPT",
+  "temporality": "CURRENT",
+  "quote": "היום לא היה לי מחשבות אובדניות",
+  "lossStage": "OpenAI extraction (salvaged by deterministic validator)"
+}

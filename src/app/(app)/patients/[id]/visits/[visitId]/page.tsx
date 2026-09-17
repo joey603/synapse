@@ -12,6 +12,7 @@ import { StructuredTransmission } from "@/components/visits/StructuredTransmissi
 import { TranscriptEditor } from "@/components/visits/TranscriptEditor";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { hebrewClinicalText } from "@/lib/clinical/hebrew-text";
 import { compareMedications } from "@/lib/clinical/medication-compare";
 import { comparisonRows, reviewItems, type ReviewItemCode } from "@/lib/clinical/review-view";
 import { visitTypeLabel } from "@/lib/clinical/templates";
@@ -178,6 +179,8 @@ export default async function VisitPage({
               t(locale, "stepExtract"),
               t(locale, "stepReport"),
             ]}
+            workingLabel={t(locale, "pipelineWorking")}
+            failedLabel={t(locale, "pipelineFailed")}
           />
           {pipeMessage(locale, visit.failureCode ?? pipe) ? (
             <p className="text-sm leading-6 text-danger" role="alert">
@@ -226,6 +229,22 @@ export default async function VisitPage({
                 previous={previousExtraction}
               />
             ) : null}
+            {(() => {
+              console.info("[Synapse Transmission SSR] visit=%s status=%s", visit.id, visit.report.status);
+              console.info("[Synapse Transmission SSR] patientStatusNote:\n%s", visit.report.patientStatusNote || "(vide)");
+              console.info("[Synapse Transmission SSR] drivingRisk: %s", visit.report.drivingRisk);
+              console.info("[Synapse Transmission SSR] diagnosisNote:\n%s", visit.report.diagnosisNote || "(vide)");
+              console.info("[Synapse Transmission SSR] mainProblems:\n%s", visit.report.mainProblems || "(vide)");
+              console.info("[Synapse Transmission SSR] currentMedication:\n%s", visit.report.currentMedication || "(vide)");
+              console.info("[Synapse Transmission SSR] interventionsProvided:\n%s", visit.report.interventionsProvided || "(vide)");
+              console.info("[Synapse Transmission SSR] carePlan:\n%s", visit.report.carePlan || "(vide)");
+              console.info(
+                "[Synapse Transmission SSR] finalReportHe length=%d:\n%s",
+                reportText.length,
+                reportText || "(vide)",
+              );
+              return null;
+            })()}
             <StructuredTransmission
               key={`structured-${visit.id}-${visit.report.mainProblems?.length ?? 0}-${visit.report.patientStatusNote?.length ?? 0}`}
               visitId={visit.id}
@@ -255,10 +274,6 @@ export default async function VisitPage({
                 copied: t(locale, "copiedBlock"),
                 copyWarn: t(locale, "copyUnvalidated"),
                 validate: t(locale, "validateReport"),
-                regenerate: t(locale, "regenerate"),
-                shorten: t(locale, "shorten"),
-                moreClinical: t(locale, "moreClinical"),
-                correctHebrew: t(locale, "correctHebrew"),
                 saved: t(locale, "saveQuiet"),
                 lost: t(locale, "saveLost"),
                 help: t(locale, "reportHelp"),
@@ -600,7 +615,7 @@ function factRow(
     label: t(locale, domainLabel(domain)),
     mark: factMark(fact),
     status: historical && !isMissing(fact) ? t(locale, "assertionHistorical") : t(locale, assertionKey(fact.assertion)),
-    value: fact.value,
+    value: hebrewClinicalText(fact.value),
     quote,
     evidenceNote: evidenceNote(locale, fact),
     sourceHref: quote ? `/patients/${patientId}/visits/${visitId}?tab=transcript&src=${encodeURIComponent(quote)}` : null,
@@ -643,13 +658,20 @@ function AnalysisExtras({
     });
   }
   if (extraction.interventions.length > 0) {
-    cards.push({ id: "interventions", title: t(locale, "sectionInterventions"), rows: extraction.interventions.map((item) => item.text) });
+    const rows = extraction.interventions.map((item) => hebrewClinicalText(item.text)).filter(Boolean) as string[];
+    if (rows.length > 0) cards.push({ id: "interventions", title: t(locale, "sectionInterventions"), rows });
   }
   if (extraction.plan.length > 0) {
-    cards.push({ id: "plan", title: t(locale, "sectionPlan"), rows: extraction.plan.map((item) => item.text) });
+    const rows = extraction.plan.map((item) => hebrewClinicalText(item.text)).filter(Boolean) as string[];
+    if (rows.length > 0) cards.push({ id: "plan", title: t(locale, "sectionPlan"), rows });
   }
   if (extraction.contradictions.length > 0) {
-    cards.push({ id: "contradictions", title: t(locale, "sectionContradictions"), rows: extraction.contradictions.map((item) => item.summary) });
+    const rows = extraction.contradictions
+      .map((item) => hebrewClinicalText(item.summary))
+      .filter(Boolean) as string[];
+    if (rows.length > 0) {
+      cards.push({ id: "contradictions", title: t(locale, "sectionContradictions"), rows });
+    }
   }
   if (extraction.medicationDiscrepancies.length > 0) {
     cards.push({
@@ -661,10 +683,15 @@ function AnalysisExtras({
     });
   }
   if (extraction.pointsToVerify.length > 0) {
-    cards.push({ id: "verify", title: t(locale, "sectionVerify"), rows: extraction.pointsToVerify });
+    const rows = extraction.pointsToVerify.map((item) => hebrewClinicalText(item)).filter(Boolean) as string[];
+    if (rows.length > 0) cards.push({ id: "verify", title: t(locale, "sectionVerify"), rows });
   }
 
-  if (cards.length === 0 && extraction.suggestedTasks.length === 0) return null;
+  const suggestedHebrew = extraction.suggestedTasks
+    .map((task) => hebrewClinicalText(task))
+    .filter(Boolean) as string[];
+
+  if (cards.length === 0 && suggestedHebrew.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -680,11 +707,11 @@ function AnalysisExtras({
           </ul>
         </section>
       ))}
-      {extraction.suggestedTasks.length > 0 ? (
+      {suggestedHebrew.length > 0 ? (
         <section className="rounded-3xl bg-card px-4 py-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
           <h2 className="text-[15px] font-semibold text-ink">{t(locale, "sectionSuggestedTasks")}</h2>
           <ul className="mt-2 flex flex-col gap-3">
-            {extraction.suggestedTasks.map((task) => (
+            {suggestedHebrew.map((task) => (
               <li key={task} className="flex flex-col gap-2">
                 <p className="text-sm leading-6 text-ink">{task}</p>
                 <form action={`/api/patients/${patientId}/tasks`} method="post">

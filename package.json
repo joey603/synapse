@@ -18,7 +18,12 @@
     "import:legacy-visits-batch4": "tsx scripts/import-legacy-visits-batch4.ts",
     "update:legacy-hebrew": "tsx scripts/update-legacy-hebrew.ts",
     "check:clinical": "tsx scripts/check-clinical.ts",
-    "check:structured-report": "tsx scripts/check-structured-report.ts"
+    "check:structured-report": "tsx scripts/check-structured-report.ts",
+    "check:jacky-pipeline": "tsx scripts/check-jacky-pipeline.ts",
+    "check:patient-isolation": "tsx scripts/check-patient-isolation.ts",
+    "check:gold-case-001": "tsx scripts/check-gold-case-001.ts",
+    "check:zebra-phase2": "tsx scripts/check-zebra-phase2.ts",
+    "gold:001": "tsx scripts/run-gold-case-001.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
