@@ -1,6 +1,7 @@
 import { NOT_ASSESSED_HE } from "@/lib/clinical/forbidden-phrases";
 import type { ClinicalFact, FactDomain, StoredExtraction } from "@/lib/clinical/types";
 import { CLINICAL_DOMAINS, EXAM_DOMAINS, RISK_DOMAINS } from "@/lib/clinical/types";
+import { composeStructuredSections } from "@/lib/clinical/structured-report";
 import { templateKeyFor } from "@/lib/clinical/templates";
 import type { VisitType } from "@prisma/client";
 
@@ -52,6 +53,49 @@ const VISIT_HE: Record<VisitType, string> = {
   OTHER: "מפגש",
 };
 
+/**
+ * Projection déterministe hébraïque depuis le JSON clinique VALIDÉ uniquement.
+ * Aucun raisonnement clinique — assemble les champs déjà validés.
+ */
+export function buildDeterministicHebrewReport(input: {
+  extraction: StoredExtraction;
+  visitType: VisitType;
+  diagnosis?: { primary: string | null; secondary: string | null };
+  medications?: Array<{ name: string; dose: string | null; frequency: string | null }>;
+}) {
+  const sections = composeStructuredSections({
+    extraction: input.extraction,
+    visitType: input.visitType,
+    diagnosis: input.diagnosis ?? { primary: null, secondary: null },
+    medications: input.medications ?? [],
+  });
+
+  const blocks: string[] = [];
+  const push = (title: string, body: string | null | undefined) => {
+    const text = body?.trim();
+    if (!text) return;
+    blocks.push(`${title}\n${text}`);
+  };
+
+  push("מצב המטופל", sections.patientStatusNote);
+  push("אבחנה", sections.diagnosisNote);
+  push("בעיות מרכזיות", sections.mainProblems);
+  push("טיפול תרופתי עדכני", sections.currentMedication);
+  push("הטיפול שניתן", sections.interventionsProvided);
+  push("תוכנית טיפול", sections.carePlan);
+
+  if (blocks.length === 0) {
+    return composeReport({
+      extraction: input.extraction,
+      visitType: input.visitType,
+      occurredAt: new Date(),
+      patientName: "",
+    });
+  }
+
+  return blocks.join("\n\n");
+}
+
 export function composeReport(input: {
   extraction: StoredExtraction;
   visitType: VisitType;
@@ -80,7 +124,7 @@ export function composeReport(input: {
   }
 
   const meds = input.extraction.medicationMentions
-    .filter((fact) => fact.assertion === "present" && fact.temporality === "current_visit" && fact.source === "transcript")
+    .filter((fact) => fact.assertion === "present" && fact.temporality === "current_visit" && isEncounterSource(fact))
     .map((fact) => sentence(fact))
     .filter(Boolean);
   if (meds.length > 0 && key !== "short") blocks.push(block("טיפול", meds.join(" ")));
@@ -117,10 +161,20 @@ function riskSentences(extraction: StoredExtraction) {
 }
 
 function riskPhrase(fact: ClinicalFact) {
-  if (fact.assertion === "explicitly_denied" && fact.evidence?.quote && fact.source === "transcript") {
+  const current = fact.evidences.find((item) => item.temporality === "CURRENT");
+  if (fact.assertion === "explicitly_denied" && fact.evidence?.quote && isEncounterSource(fact)) {
+    if (current?.speaker === "FAMILY") {
+      return `לדברי המשפחה. נמסר: «${fact.evidence.quote}»`;
+    }
+    if (current?.source === "NURSE_NOTE" && current.speaker === "NURSE") {
+      return `תיעוד Nurse Note. נמסר: «${fact.evidence.quote}»`;
+    }
     return `נשלל במפורש במפגש זה. נמסר: «${fact.evidence.quote}»`;
   }
-  if (fact.assertion === "present" && fact.evidence?.quote && fact.source === "transcript") {
+  if (fact.assertion === "present" && fact.evidence?.quote && isEncounterSource(fact)) {
+    if (current?.speaker === "FAMILY") {
+      return `לדברי המשפחה. נמסר: «${fact.evidence.quote}»`;
+    }
     return `דווח במפגש זה. נמסר: «${fact.evidence.quote}»`;
   }
   if (fact.assertion === "uncertain") return "לאימות. לא נרשם כממצא.";
@@ -134,7 +188,16 @@ function sentence(fact: ClinicalFact) {
 }
 
 function isCurrentPresent(fact: ClinicalFact) {
-  return fact.assertion === "present" && fact.temporality === "current_visit" && fact.source === "transcript";
+  return fact.assertion === "present" && fact.temporality === "current_visit" && isEncounterSource(fact);
+}
+
+/** Fait issu de la rencontre — pas dossier patient ni visite antérieure seule. */
+function isEncounterSource(fact: ClinicalFact) {
+  if (fact.source === "patient_record" || fact.source === "previous_validated_visit") return false;
+  return (
+    fact.source === "transcript" ||
+    fact.evidences.some((item) => item.source === "TRANSCRIPT" || item.source === "NURSE_NOTE")
+  );
 }
 
 function block(title: string, body: string) {

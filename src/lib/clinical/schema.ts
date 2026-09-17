@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import {
-  EVIDENCE_SOURCES,
   EVIDENCE_TIMES,
   EVOLUTIONS,
   FACT_DOMAINS,
@@ -22,13 +21,12 @@ const temporality = z.enum(["current_visit", "historical", "unknown"]);
 const source = z.enum(["transcript", "patient_record", "previous_validated_visit"]);
 const confidence = z.enum(["high", "medium", "low"]);
 const speaker = z.enum(SPEAKERS);
-const evidenceSource = z.enum(EVIDENCE_SOURCES);
 const evidenceTime = z.enum(EVIDENCE_TIMES);
 
 const evidenceItemSchema = z.object({
   quote: z.string(),
   speaker: speaker.optional(),
-  source: evidenceSource.optional(),
+  source: z.string().optional(),
   temporality: evidenceTime.optional(),
 });
 
@@ -65,6 +63,7 @@ export const extractionSchema = z.object({
     medication: z.string().optional(),
     recordDose: z.string().nullable().optional(),
     reportedDose: z.string().optional(),
+    evidence: z.array(evidenceItemSchema).optional(),
   })).optional(),
   pointsToVerify: z.array(z.string()).optional(),
   suggestedTasks: z.array(z.string()).optional(),
@@ -80,7 +79,9 @@ export function coerceFact(raw: z.infer<typeof clinicalFactSchema> | undefined):
     value: raw.value?.trim() ? raw.value.trim().slice(0, 500) : null,
     assertion: raw.assertion ?? base.assertion,
     temporality: raw.temporality ?? (current ? "current_visit" : base.temporality),
-    source: raw.source ?? (current?.source === "NURSE_NOTE" ? "transcript" : base.source),
+    // SourceKind legacy (transcript/patient_record/…) ≠ EvidenceSource (TRANSCRIPT/NURSE_NOTE).
+    // Ne jamais requalifier NURSE_NOTE en « transcript » ici.
+    source: raw.source ?? base.source,
     evidence: current ? { quote: current.quote } : null,
     evidences,
     confidence: raw.confidence ?? base.confidence,
@@ -88,34 +89,97 @@ export function coerceFact(raw: z.infer<typeof clinicalFactSchema> | undefined):
 }
 
 export function coerceExtraction(raw: unknown) {
-  const parsed = extractionSchema.safeParse(raw);
-  if (!parsed.success) return null;
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
 
+  // Parse souple : un domaine inventé / mal formé par OpenAI ne doit pas faire échouer toute l’extraction.
+  const factsBag = asRecord(data.facts);
   const facts = {} as Record<FactDomain, ClinicalFact>;
   for (const domain of FACT_DOMAINS) {
-    facts[domain] = coerceFact(parsed.data.facts?.[domain]);
+    facts[domain] = coerceFact(normalizeFactRaw(factsBag[domain]));
   }
 
   const longitudinal: Partial<Record<FactDomain, Evolution>> = {};
+  const longitudinalRaw = asRecord(data.longitudinal);
   for (const domain of FACT_DOMAINS) {
-    const value = parsed.data.longitudinal?.[domain];
-    if (value && (EVOLUTIONS as readonly string[]).includes(value)) {
+    const value = longitudinalRaw[domain];
+    if (typeof value === "string" && (EVOLUTIONS as readonly string[]).includes(value)) {
       longitudinal[domain] = value as Evolution;
     }
   }
 
+  const medicationMentions = asArray(data.medicationMentions)
+    .map((item) => coerceFact(normalizeFactRaw(item)))
+    .slice(0, 12);
+
+  const interventions = asArray(data.interventions)
+    .map((item) => {
+      const parsed = citedSchema.safeParse(item);
+      return parsed.success ? readCited(parsed.data) : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item?.text))
+    .slice(0, 16);
+
+  const plan = asArray(data.plan)
+    .map((item) => {
+      const parsed = citedSchema.safeParse(item);
+      return parsed.success ? readCited(parsed.data) : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item?.text))
+    .slice(0, 16);
+
+  const contradictions = asArray(data.contradictions)
+    .flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      return readContradiction(item as { kind?: string; summary?: string; evidence?: z.infer<typeof evidenceItemSchema>[] });
+    })
+    .slice(0, 12);
+
+  const medicationDiscrepancies = asArray(data.medicationDiscrepancies)
+    .flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      return readDiscrepancy(item as {
+        medication?: string;
+        recordDose?: string | null;
+        reportedDose?: string;
+        evidence?: z.infer<typeof evidenceItemSchema>[];
+      });
+    })
+    .slice(0, 12);
+
   return {
     facts,
-    medicationMentions: (parsed.data.medicationMentions ?? []).map((item) => coerceFact(item)).slice(0, 12),
+    medicationMentions,
     longitudinal,
-    interventions: (parsed.data.interventions ?? []).map(readCited).filter((item) => item.text).slice(0, 16),
-    plan: (parsed.data.plan ?? []).map(readCited).filter((item) => item.text).slice(0, 16),
-    contradictions: (parsed.data.contradictions ?? []).flatMap(readContradiction).slice(0, 12),
-    medicationDiscrepancies: (parsed.data.medicationDiscrepancies ?? []).flatMap(readDiscrepancy).slice(0, 12),
-    pointsToVerify: cleanLines(parsed.data.pointsToVerify),
-    suggestedTasks: cleanLines(parsed.data.suggestedTasks),
-    finalReportHe: parsed.data.finalReportHe?.trim() || null,
+    interventions,
+    plan,
+    contradictions,
+    medicationDiscrepancies,
+    pointsToVerify: cleanLines(asStringArray(data.pointsToVerify)),
+    suggestedTasks: cleanLines(asStringArray(data.suggestedTasks)),
+    finalReportHe: typeof data.finalReportHe === "string" ? data.finalReportHe.trim() || null : null,
   };
+}
+
+function normalizeFactRaw(value: unknown): z.infer<typeof clinicalFactSchema> | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  const parsed = clinicalFactSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is string => typeof item === "string");
 }
 
 export function parseStored(payload: unknown): StoredExtraction | null {
@@ -159,15 +223,27 @@ function readEvidences(raw: z.infer<typeof clinicalFactSchema>): EvidenceItem[] 
   return [];
 }
 
-function readEvidence(raw: z.infer<typeof evidenceItemSchema>): EvidenceItem | null {
+function readEvidence(raw: z.infer<typeof evidenceItemSchema> & { source?: string }): EvidenceItem | null {
   const quote = raw.quote?.trim().slice(0, 400);
   if (!quote) return null;
   return {
     quote,
     speaker: raw.speaker ?? "UNKNOWN",
-    source: raw.source ?? "TRANSCRIPT",
+    source: normalizeEvidenceSource(raw.source),
     temporality: raw.temporality ?? "CURRENT",
   };
+}
+
+/** Normalise les conventions legacy (`transcript`, `nurse_note`) → TRANSCRIPT / NURSE_NOTE. */
+export function normalizeEvidenceSource(raw: string | undefined | null): EvidenceItem["source"] {
+  const value = (raw ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (value === "NURSE_NOTE" || value === "NURSENOTE") return "NURSE_NOTE";
+  if (value === "TRANSCRIPT") return "TRANSCRIPT";
+  // Legacy minuscule / variantes
+  const lower = (raw ?? "").trim().toLowerCase();
+  if (lower === "nurse_note" || lower === "nursenote" || lower === "nurse note") return "NURSE_NOTE";
+  if (lower === "transcript") return "TRANSCRIPT";
+  return "TRANSCRIPT";
 }
 
 function readCited(raw: z.infer<typeof citedSchema>) {
@@ -198,7 +274,12 @@ function readContradiction(raw: { kind?: string; summary?: string; evidence?: z.
   }];
 }
 
-function readDiscrepancy(raw: { medication?: string; recordDose?: string | null; reportedDose?: string }): MedicationDiscrepancy[] {
+function readDiscrepancy(raw: {
+  medication?: string;
+  recordDose?: string | null;
+  reportedDose?: string;
+  evidence?: z.infer<typeof evidenceItemSchema>[];
+}): MedicationDiscrepancy[] {
   const medication = raw.medication?.trim().slice(0, 120);
   const reportedDose = raw.reportedDose?.trim().slice(0, 80);
   if (!medication || !reportedDose) return [];
@@ -207,6 +288,7 @@ function readDiscrepancy(raw: { medication?: string; recordDose?: string | null;
     recordDose: raw.recordDose?.trim().slice(0, 80) || null,
     reportedDose,
     requiresHumanReview: true,
+    evidence: (raw.evidence ?? []).map(readEvidence).filter((item): item is EvidenceItem => item != null),
   }];
 }
 

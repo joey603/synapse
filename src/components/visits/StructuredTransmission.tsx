@@ -61,11 +61,9 @@ export function StructuredTransmission({
     shorten: string;
     moreClinical: string;
     correctHebrew: string;
-    confirmOverwrite: string;
     saved: string;
     lost: string;
     help: string;
-    confirmNeeded: boolean;
     validatedBadge: string;
     visitInfo: string;
     visitType: string;
@@ -363,18 +361,7 @@ export function StructuredTransmission({
 
       {validated ? null : (
         <div className="flex flex-col gap-2">
-          {labels.confirmNeeded ? (
-            <form action={`/api/visits/${visitId}/report/actions`} method="post" className="flex flex-col gap-2">
-              <input type="hidden" name="action" value="regenerate" />
-              <label className="flex items-start gap-3 text-sm leading-6 text-ink">
-                <input type="checkbox" name="confirm" required className="mt-1 h-4 w-4 accent-accent" />
-                {labels.confirmOverwrite}
-              </label>
-              <ActionButton label={labels.regenerate} />
-            </form>
-          ) : (
-            <ActionForm visitId={visitId} action="regenerate" label={labels.regenerate} />
-          )}
+          <ActionForm visitId={visitId} action="regenerate" label={labels.regenerate} />
           <ActionForm visitId={visitId} action="shorten" label={labels.shorten} />
           <ActionForm visitId={visitId} action="more_clinical" label={labels.moreClinical} />
           <ActionForm visitId={visitId} action="correct_hebrew" label={labels.correctHebrew} />

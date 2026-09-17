@@ -29,7 +29,14 @@ async function removeRecording(
       mimeType: true,
       sizeBytes: true,
       status: true,
-      visit: { select: { id: true, patientId: true, pipelineStatus: true } },
+      visit: {
+        select: {
+          id: true,
+          patientId: true,
+          pipelineStatus: true,
+          report: { select: { id: true, status: true } },
+        },
+      },
     },
   });
   const back = recording
@@ -50,6 +57,10 @@ async function removeRecording(
   if (!recording || recording.status !== "STORED") {
     return NextResponse.redirect(appUrl(request, back), 303);
   }
+  // Visite validée : ne pas effacer transcription / analyse / papier.
+  if (recording.visit.report?.status === "VALIDATED") {
+    return NextResponse.redirect(appUrl(request, `${back}?tab=report`), 303);
+  }
 
   try {
     await getStorage().delete(recording.storageKey);
@@ -58,12 +69,35 @@ async function removeRecording(
         where: { id: recording.id },
         data: { status: "DELETED", deletedAt: new Date() },
       });
-      if (recording.visit.pipelineStatus === "UPLOADED") {
-        await tx.visit.update({
-          where: { id: recording.visit.id },
-          data: { pipelineStatus: "IDLE" },
+      await tx.transcript.deleteMany({ where: { visitId: recording.visit.id } });
+      await tx.clinicalExtraction.deleteMany({ where: { visitId: recording.visit.id } });
+      if (recording.visit.report) {
+        await tx.clinicalReport.update({
+          where: { id: recording.visit.report.id },
+          data: {
+            status: "DRAFT",
+            aiDraft: null,
+            editedDraft: null,
+            finalText: null,
+            patientStatusNote: null,
+            drivingRisk: "NOT_ASSESSED",
+            diagnosisNote: null,
+            mainProblems: null,
+            currentMedication: null,
+            interventionsProvided: null,
+            carePlan: null,
+            validatedAt: null,
+            validatedById: null,
+            provider: null,
+            model: null,
+            promptVersion: null,
+          },
         });
       }
+      await tx.visit.update({
+        where: { id: recording.visit.id },
+        data: { pipelineStatus: "IDLE", failureCode: null },
+      });
     });
 
     await audit({
@@ -73,7 +107,11 @@ async function removeRecording(
       entityId: recording.id,
       patientId: recording.visit.patientId,
       visitId: recording.visit.id,
-      metadata: { bytes: recording.sizeBytes, mime: recording.mimeType },
+      metadata: {
+        bytes: recording.sizeBytes,
+        mime: recording.mimeType,
+        resetPipeline: true,
+      },
     });
 
     return NextResponse.redirect(appUrl(request, `${back}#audio`), 303);

@@ -6,6 +6,7 @@ import {
   type EvidenceItem,
   type Evolution,
   type FactDomain,
+  type MedicationDiscrepancy,
   type StoredExtraction,
 } from "@/lib/clinical/types";
 import { currentQuote } from "@/lib/clinical/types";
@@ -29,21 +30,44 @@ export function validateExtraction(
     facts[domain] = applyRules(coerced.facts[domain], transcript, nurseNotes, domain, downgraded);
   }
 
+  const medicationMentions = coerced.medicationMentions.map((fact, index) =>
+    applyRules(fact, transcript, nurseNotes, `medication:${index}`, downgraded, true),
+  );
+  const interventions = keepCited(coerced.interventions, transcript, nurseNotes);
+  const plan = keepCited(coerced.plan, transcript, nurseNotes);
+  const contradictions = keepContradictions(coerced.contradictions, transcript, nurseNotes, points);
+  const medicationDiscrepancies = keepDiscrepancies(
+    coerced.medicationDiscrepancies,
+    transcript,
+    nurseNotes,
+    points,
+  );
+
+  const partial: Pick<
+    StoredExtraction,
+    "facts" | "medicationMentions" | "interventions" | "plan" | "contradictions" | "medicationDiscrepancies"
+  > = {
+    facts,
+    medicationMentions,
+    interventions,
+    plan,
+    contradictions,
+    medicationDiscrepancies,
+  };
+
   return {
     facts,
-    medicationMentions: coerced.medicationMentions.map((fact, index) =>
-      applyRules(fact, transcript, nurseNotes, `medication:${index}`, downgraded, true),
-    ),
+    medicationMentions,
     changes: [],
     reviewFlags: [],
     downgraded,
     longitudinal: gateLongitudinal(coerced.longitudinal, facts),
-    interventions: keepCited(coerced.interventions, transcript, nurseNotes),
-    plan: keepCited(coerced.plan, transcript, nurseNotes),
-    contradictions: keepContradictions(coerced.contradictions, transcript, nurseNotes, points),
-    medicationDiscrepancies: keepDiscrepancies(coerced.medicationDiscrepancies, transcript, points),
+    interventions,
+    plan,
+    contradictions,
+    medicationDiscrepancies,
     pointsToVerify: points.slice(0, 12),
-    suggestedTasks: coerced.suggestedTasks,
+    suggestedTasks: keepSuggestedTasks(coerced.suggestedTasks, transcript, nurseNotes, partial),
     finalReportHe: coerced.finalReportHe,
   };
 }
@@ -58,7 +82,7 @@ function applyRules(
 ): ClinicalFact {
   const evidences = fact.evidences.filter((item) => quoteFound(item, transcript, nurseNotes));
   const current = evidences.filter((item) => item.temporality === "CURRENT");
-  let assertion = fact.assertion;
+  const assertion = fact.assertion;
 
   if (assertion === "not_assessed" || assertion === "not_reported") {
     return finish({ ...fact, evidences, evidence: null }, medication);
@@ -86,7 +110,9 @@ function applyRules(
     evidences,
     evidence: quote ? { quote } : null,
     temporality: current.length > 0 ? "current_visit" : fact.temporality,
-    source: current[0]?.source === "NURSE_NOTE" ? "transcript" : fact.source,
+    // Conserver SourceKind tel quel — ne jamais mapper NURSE_NOTE → « transcript ».
+    // La provenance documentaire reste dans evidences[].source (TRANSCRIPT | NURSE_NOTE).
+    source: fact.source,
   }, medication);
 }
 
@@ -154,25 +180,125 @@ function keepContradictions(
   return kept;
 }
 
+/**
+ * Conserve une divergence médicamenteuse si une preuve explicite existe
+ * dans TRANSCRIPT ou NURSE_NOTE. Ne résout jamais quelle dose est correcte.
+ */
 function keepDiscrepancies(
-  items: StoredExtraction["medicationDiscrepancies"],
+  items: MedicationDiscrepancy[],
   transcript: string,
+  nurseNotes: string,
   points: string[],
-) {
+): MedicationDiscrepancy[] {
   return items.flatMap((item) => {
-    const spoken = item.reportedDose;
-    const number = spoken.match(/\d+/)?.[0];
-    if (
-      !quoteInTranscript(spoken, transcript) &&
-      !quoteInTranscript(item.medication, transcript) &&
-      !(number && transcript.includes(number))
-    ) {
-      points.push(`${item.medication}: ${spoken}`);
+    const evidence = (item.evidence ?? []).filter((proof) => quoteFound(proof, transcript, nurseNotes));
+    const supportedByEvidence = evidence.length > 0;
+    const supportedByCorpus =
+      anchoredInSources(item.reportedDose, transcript, nurseNotes) ||
+      anchoredInSources(item.medication, transcript, nurseNotes) ||
+      doseNumberInSources(item.reportedDose, transcript, nurseNotes);
+
+    if (!supportedByEvidence && !supportedByCorpus) {
+      points.push(`${item.medication}: ${item.reportedDose}`);
       return [];
     }
-    return [{ ...item, requiresHumanReview: true as const }];
+
+    return [{
+      ...item,
+      evidence,
+      requiresHumanReview: true as const,
+    }];
   });
 }
+
+/**
+ * Garde déterministe léger : une suggestedTask n’est conservée que si elle
+ * est ancrée dans TRANSCRIPT, NURSE_NOTE, ou un élément déjà validé.
+ * Ne crée jamais de Task réelle.
+ */
+function keepSuggestedTasks(
+  tasks: string[],
+  transcript: string,
+  nurseNotes: string,
+  validated: Pick<
+    StoredExtraction,
+    "facts" | "medicationMentions" | "interventions" | "plan" | "contradictions" | "medicationDiscrepancies"
+  >,
+): string[] {
+  const anchors = collectValidatedAnchors(validated);
+  return tasks.filter((task) => {
+    if (anchoredInSources(task, transcript, nurseNotes)) return true;
+    return anchors.some((anchor) => sharesSignificantToken(task, anchor));
+  });
+}
+
+function collectValidatedAnchors(
+  validated: Pick<
+    StoredExtraction,
+    "facts" | "medicationMentions" | "interventions" | "plan" | "contradictions" | "medicationDiscrepancies"
+  >,
+): string[] {
+  const anchors: string[] = [];
+  for (const domain of FACT_DOMAINS) {
+    const fact = validated.facts[domain];
+    if (fact.assertion !== "present" && fact.assertion !== "explicitly_denied") continue;
+    if (fact.value) anchors.push(fact.value);
+    for (const item of fact.evidences) anchors.push(item.quote);
+    if (fact.evidence?.quote) anchors.push(fact.evidence.quote);
+  }
+  for (const fact of validated.medicationMentions) {
+    if (fact.value) anchors.push(fact.value);
+    for (const item of fact.evidences) anchors.push(item.quote);
+  }
+  for (const item of validated.interventions) {
+    anchors.push(item.text);
+    for (const proof of item.evidence) anchors.push(proof.quote);
+  }
+  for (const item of validated.plan) {
+    anchors.push(item.text);
+    for (const proof of item.evidence) anchors.push(proof.quote);
+  }
+  for (const item of validated.contradictions) {
+    anchors.push(item.summary);
+    for (const proof of item.evidence) anchors.push(proof.quote);
+  }
+  for (const item of validated.medicationDiscrepancies) {
+    anchors.push(item.medication, item.reportedDose);
+    if (item.recordDose) anchors.push(item.recordDose);
+  }
+  return anchors.filter(Boolean);
+}
+
+function anchoredInSources(text: string, transcript: string, nurseNotes: string) {
+  return quoteInTranscript(text, transcript) || quoteInTranscript(text, nurseNotes) || sharesSignificantToken(text, `${transcript} ${nurseNotes}`);
+}
+
+function doseNumberInSources(spoken: string, transcript: string, nurseNotes: string) {
+  const number = spoken.match(/\d+/)?.[0];
+  if (!number) return false;
+  return transcript.includes(number) || nurseNotes.includes(number);
+}
+
+function sharesSignificantToken(left: string, right: string) {
+  const rightNorm = normalize(right);
+  if (!rightNorm) return false;
+  const tokens = significantTokens(left);
+  if (tokens.length === 0) return false;
+  return tokens.some((token) => rightNorm.includes(token));
+}
+
+function significantTokens(value: string) {
+  return normalize(value)
+    .split(" ")
+    .filter((token) => token.length >= 4)
+    .filter((token) => !STOP_TOKENS.has(token));
+}
+
+const STOP_TOKENS = new Set([
+  "avec", "sans", "pour", "dans", "cette", "cela", "aussi", "plus", "moins",
+  "demander", "suivre", "faire", "avoir", "etre", "être",
+  "מעקב", "לבדוק", "לוודא", "לקבוע", "ביצוע", "המשך",
+]);
 
 function quoteFound(item: EvidenceItem, transcript: string, nurseNotes: string) {
   const corpus = item.source === "NURSE_NOTE" ? nurseNotes : transcript;

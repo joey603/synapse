@@ -195,12 +195,6 @@ export default async function VisitPage({
           {!busy && !validated && visit.transcript ? (
             <form action={`/api/visits/${visit.id}/pipeline`} method="post" className="flex flex-col gap-3">
               <input type="hidden" name="mode" value="analyze" />
-              {visit.report?.status === "REVIEWED" || pipe === "confirm" ? (
-                <label className="flex items-start gap-3 text-sm leading-6 text-ink">
-                  <input type="checkbox" name="confirm" required className="mt-1 h-4 w-4 accent-accent" />
-                  {t(locale, "confirmOverwrite")}
-                </label>
-              ) : null}
               <button type="submit" className="min-h-12 w-full rounded-2xl bg-accent text-sm font-semibold text-white">
                 {t(locale, "analyzeVisit")}
               </button>
@@ -265,11 +259,9 @@ export default async function VisitPage({
                 shorten: t(locale, "shorten"),
                 moreClinical: t(locale, "moreClinical"),
                 correctHebrew: t(locale, "correctHebrew"),
-                confirmOverwrite: t(locale, "confirmOverwrite"),
                 saved: t(locale, "saveQuiet"),
                 lost: t(locale, "saveLost"),
                 help: t(locale, "reportHelp"),
-                confirmNeeded: visit.report.status === "REVIEWED" || pipe === "confirm",
                 validatedBadge: t(locale, "workflowValidated"),
                 visitInfo: t(locale, "structuredVisitInfo"),
                 visitType: t(locale, "structuredVisitType"),

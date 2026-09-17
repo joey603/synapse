@@ -6,7 +6,7 @@ import { loadVisitContext } from "@/lib/ai/context";
 import { getClinicalProvider, getTranscriptionProvider, providerName } from "@/lib/ai/factory";
 import { audit } from "@/lib/audit";
 import { diffValidated } from "@/lib/clinical/diff";
-import { composeReport } from "@/lib/clinical/compose-report";
+import { buildDeterministicHebrewReport } from "@/lib/clinical/compose-report";
 import { hebrewNeedsRewrite, scrubForbidden } from "@/lib/clinical/forbidden-phrases";
 import { reviewFlags } from "@/lib/clinical/review-flags";
 import { composeStructuredSections } from "@/lib/clinical/structured-report";
@@ -248,10 +248,20 @@ async function generate(
   const extraction = parseStored(visit.extraction?.payload);
   if (!extraction) throw new Error("generation_failed");
 
+  const meds = await db.medication.findMany({
+    where: { patientId: visit.patientId, active: true },
+    orderBy: { name: "asc" },
+    select: { name: true, dose: true, frequency: true },
+  });
+  const diagnosis = {
+    primary: visit.patient.primaryDiagnosis,
+    secondary: visit.patient.secondaryDiagnoses,
+  };
+
   let text: string;
   let model: string;
   try {
-    const drafted = await draftHebrew(visit, extraction);
+    const drafted = await draftHebrew(visit, extraction, meds, diagnosis);
     text = drafted.text;
     model = drafted.model;
   } catch {
@@ -260,18 +270,10 @@ async function generate(
 
   if (!text.trim()) throw new Error("generation_failed");
 
-  const meds = await db.medication.findMany({
-    where: { patientId: visit.patientId, active: true },
-    orderBy: { name: "asc" },
-    select: { name: true, dose: true, frequency: true },
-  });
   const structured = composeStructuredSections({
     extraction,
     visitType: visit.type,
-    diagnosis: {
-      primary: visit.patient.primaryDiagnosis,
-      secondary: visit.patient.secondaryDiagnoses,
-    },
+    diagnosis,
     medications: meds,
   });
 
@@ -310,14 +312,16 @@ async function generate(
 async function draftHebrew(
   visit: NonNullable<Awaited<ReturnType<typeof reload>>>,
   extraction: NonNullable<ReturnType<typeof parseStored>>,
+  medications: Array<{ name: string; dose: string | null; frequency: string | null }>,
+  diagnosis: { primary: string | null; secondary: string | null },
 ) {
   const fallback = () =>
     scrubForbidden(
-      composeReport({
+      buildDeterministicHebrewReport({
         extraction,
         visitType: visit.type,
-        occurredAt: visit.occurredAt,
-        patientName: `${visit.patient.firstName} ${visit.patient.lastName}`,
+        diagnosis,
+        medications,
       }),
       extraction,
     ).text;
@@ -328,12 +332,17 @@ async function draftHebrew(
 
   const proposed = extraction.finalReportHe?.trim() ?? "";
   const first = proposed ? scrubForbidden(proposed, extraction) : null;
-  if (!hebrewNeedsRewrite(extraction, proposed) && first) return { text: first.text, model: "validated-json" };
+  if (!hebrewNeedsRewrite(extraction, proposed) && first) {
+    return { text: first.text, model: "validated-json" };
+  }
 
   const rewritten = await getClinicalProvider().writeReport({ extraction });
   const second = scrubForbidden(rewritten.text, extraction);
-  if (!second.replaced && second.text.trim()) return { text: second.text, model: rewritten.model };
-  return { text: fallback(), model: "composed-fallback" };
+  if (!second.replaced && second.text.trim()) {
+    return { text: second.text, model: rewritten.model };
+  }
+  // Contrôle de sécurité échoué → projection déterministe uniquement.
+  return { text: fallback(), model: "deterministic-fallback" };
 }
 
 async function previousExtraction(patientId: string, visitId: string) {

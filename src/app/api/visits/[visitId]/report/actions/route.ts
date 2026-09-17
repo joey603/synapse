@@ -38,10 +38,6 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
   const extraction = parseStored(visit.extraction.payload);
   if (!extraction) return NextResponse.redirect(appUrl(request, `${back}&pipe=generation_failed`), 303);
 
-  if (action === "regenerate" && visit.report.status === "REVIEWED" && form.get("confirm") !== "on") {
-    return NextResponse.redirect(appUrl(request, `${back}&pipe=confirm`), 303);
-  }
-
   try {
     const previous = visit.report.editedDraft ?? "";
     let text = previous;

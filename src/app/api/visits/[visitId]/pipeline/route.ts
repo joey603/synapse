@@ -50,9 +50,6 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
   if (report?.status === "VALIDATED") {
     return NextResponse.redirect(appUrl(request, back), 303);
   }
-  if (mode === "analyze" && report?.status === "REVIEWED" && form?.get("confirm") !== "on") {
-    return NextResponse.redirect(appUrl(request, `${back}?tab=analysis&pipe=confirm`), 303);
-  }
 
   void startPipeline(visit.id, session.user.id, mode).catch(() => logger.error("pipeline.failed"));
   return NextResponse.redirect(appUrl(request, `${back}?run=1&tab=${mode === "analyze" ? "analysis" : "transcript"}`), 303);

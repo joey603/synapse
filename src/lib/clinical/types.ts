@@ -151,6 +151,8 @@ export type MedicationDiscrepancy = {
   recordDose: string | null;
   reportedDose: string;
   requiresHumanReview: true;
+  /** Preuves documentaires (TRANSCRIPT ou NURSE_NOTE) — jamais une résolution automatique. */
+  evidence?: EvidenceItem[];
 };
 
 export type StoredExtraction = {

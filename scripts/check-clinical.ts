@@ -1,4 +1,4 @@
-import { composeReport } from "../src/lib/clinical/compose-report";
+import { buildDeterministicHebrewReport, composeReport } from "../src/lib/clinical/compose-report";
 import { hebrewNeedsRewrite, scrubForbidden } from "../src/lib/clinical/forbidden-phrases";
 import { compareMedications } from "../src/lib/clinical/medication-compare";
 import { reviewItems, visitDeltas } from "../src/lib/clinical/review-view";
@@ -318,6 +318,186 @@ const spouseNote = validateExtraction(
 );
 if (spouseNote?.facts.suicidality.assertion === "explicitly_denied") {
   throw new Error("case family denial was accepted as the patient’s");
+}
+
+// --- Hardening Lot : source NURSE_NOTE / TRANSCRIPT ---
+const nurseObs = "המטופל נראה עייף מאוד ושוכב במיטה";
+const nurseObsResult = validateExtraction(
+  {
+    facts: {
+      behavior: evidenced("present", nurseObs, { speaker: "NURSE", source: "NURSE_NOTE" }),
+    },
+  },
+  "אין תמלול על כך",
+  nurseObs,
+);
+if (nurseObsResult?.facts.behavior.assertion !== "present") {
+  throw new Error("Test A: nurse note observation was dropped");
+}
+if (
+  nurseObsResult.facts.behavior.evidences[0]?.source !== "NURSE_NOTE" ||
+  nurseObsResult.facts.behavior.evidences[0]?.speaker !== "NURSE"
+) {
+  throw new Error("Test A: NURSE_NOTE/NURSE provenance was requalified");
+}
+
+const voices = "אני שומע קולות";
+const voicesResult = validateExtraction(
+  {
+    facts: {
+      hallucinations: evidenced("present", voices, { speaker: "PATIENT", source: "TRANSCRIPT" }),
+    },
+  },
+  voices,
+  "",
+);
+if (
+  voicesResult?.facts.hallucinations.evidences[0]?.source !== "TRANSCRIPT" ||
+  voicesResult.facts.hallucinations.evidences[0]?.speaker !== "PATIENT"
+) {
+  throw new Error("Test B: TRANSCRIPT/PATIENT provenance was lost");
+}
+
+const legacySource = validateExtraction(
+  {
+    facts: {
+      mood: {
+        assertion: "present",
+        evidences: [{ quote: "je suis triste", speaker: "PATIENT", source: "transcript" as never, temporality: "CURRENT" }],
+      },
+    },
+  },
+  "je suis triste",
+);
+if (legacySource?.facts.mood.evidences[0]?.source !== "TRANSCRIPT") {
+  throw new Error("legacy lowercase transcript was not normalized to TRANSCRIPT");
+}
+
+// OpenAI parfois invente des domaines / renvoie un tableau au lieu d’un fait
+const malformed = validateExtraction(
+  {
+    facts: {
+      reasonForVisit: [
+        {
+          assertion: "reasonForVisit",
+          value: "test",
+          evidence: [{ quote: "אני רוצה לעשות טסט.", speaker: "PATIENT", source: "TRANSCRIPT", temporality: "CURRENT" }],
+        },
+      ],
+      mood: evidenced("present", "אני רוצה לעשות טסט."),
+    },
+    longitudinal: { reasonForVisit: "new" },
+    interventions: [],
+    plan: [],
+    suggestedTasks: [],
+    finalReportHe: "טסט",
+  },
+  "אני רוצה לעשות טסט.",
+);
+if (!malformed) throw new Error("malformed OpenAI payload made coerceExtraction return null");
+if (malformed.facts.suicidality.assertion !== "not_assessed") {
+  throw new Error("malformed payload lost default not_assessed suicidality");
+}
+if (malformed.facts.mood.assertion !== "present") {
+  throw new Error("malformed payload dropped a valid mood fact");
+}
+
+// --- Medication discrepancies : TRANSCRIPT + NURSE_NOTE ---
+const clozapineNote = 'לדברי האם המטופלת מקבלת קלוזאפין 250 מ"ג';
+const clozaGap = validateExtraction(
+  {
+    medicationDiscrepancies: [
+      {
+        medication: "Clozapine",
+        recordDose: "300 mg",
+        reportedDose: "250",
+        evidence: [{ quote: clozapineNote, speaker: "FAMILY", source: "NURSE_NOTE", temporality: "CURRENT" }],
+      },
+    ],
+  },
+  "",
+  clozapineNote,
+);
+if (!clozaGap?.medicationDiscrepancies.some((item) => item.medication === "Clozapine" && item.requiresHumanReview)) {
+  throw new Error("nurse-note medication discrepancy was dropped");
+}
+if (clozaGap.medicationDiscrepancies[0]?.recordDose !== "300 mg") {
+  throw new Error("medication discrepancy resolved a dose automatically");
+}
+
+const inventedGap = validateExtraction(
+  {
+    medicationDiscrepancies: [
+      { medication: "Inventedol", recordDose: "10 mg", reportedDose: "12 mg" },
+    ],
+  },
+  "rien sur les médicaments",
+  "observation sans dose",
+);
+if (inventedGap?.medicationDiscrepancies.length) {
+  throw new Error("unsupported medication discrepancy was kept");
+}
+
+// --- suggestedTasks evidence-gating ---
+const renewalTalk = "אין לי יותר מרשם לקלוזאפין";
+const renewalTasks = validateExtraction(
+  {
+    suggestedTasks: ["לוודא חידוש מרשם לקלוזאפין", "לקבוע בדיקות דם"],
+  },
+  renewalTalk,
+);
+if (!renewalTasks?.suggestedTasks.includes("לוודא חידוש מרשם לקלוזאפין")) {
+  throw new Error("supported suggested task was dropped");
+}
+if (renewalTasks.suggestedTasks.includes("לקבוע בדיקות דם")) {
+  throw new Error("unsupported suggested task was kept");
+}
+
+const bloodNote = "יש לקבוע בדיקת דם השבוע";
+const bloodTasks = validateExtraction(
+  {
+    suggestedTasks: ["מעקב אחר ביצוע בדיקת הדם"],
+  },
+  "",
+  bloodNote,
+);
+if (!bloodTasks?.suggestedTasks.includes("מעקב אחר ביצוע בדיקת הדם")) {
+  throw new Error("nurse-note supported suggested task was dropped");
+}
+
+// --- finalReportHe deterministic projection ---
+const detSource = validateExtraction(
+  {
+    facts: {
+      mood: evidenced("present", "המצב יציב"),
+      suicidality: emptyFact(),
+    },
+    interventions: [{ text: "הקשבה פעילה", evidence: [proof("הקשבה פעילה", { speaker: "NURSE" })] }],
+    plan: [{ text: "המשך מעקב", evidence: [proof("המשך מעקב", { speaker: "NURSE" })] }],
+    medicationDiscrepancies: [
+      { medication: "Lithium", recordDose: "600 mg", reportedDose: "900 mg" },
+    ],
+  },
+  "המצב יציב. הקשבה פעילה. המשך מעקב. Lithium 900 mg",
+);
+if (!detSource) throw new Error("deterministic fixture invalid");
+const detReport = buildDeterministicHebrewReport({
+  extraction: detSource,
+  visitType: "IN_PERSON",
+  diagnosis: { primary: null, secondary: null },
+  medications: [{ name: "Lithium", dose: "600 mg", frequency: null }],
+});
+if (/שולל מחשבות אובדני|אין מחשבות אובדני/.test(detReport)) {
+  throw new Error("deterministic report invented a suicide denial");
+}
+if (/Cyclothymia|אבחנה חדשה/.test(detReport)) {
+  throw new Error("deterministic report invented a diagnosis");
+}
+if (!detReport.includes("600") || !detReport.includes("900")) {
+  throw new Error("deterministic report lost medication discrepancy projection");
+}
+if (!detReport.includes("הקשבה פעילה") || !detReport.includes("המשך מעקב")) {
+  throw new Error("deterministic report lost validated interventions/plan");
 }
 
 console.info("clinical checks ok");
