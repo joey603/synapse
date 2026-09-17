@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { BidiRichText } from "@/components/ui/BidiRichText";
+import { BIDI_TEXT_CLASS, stripBidiMarks, textDirection, wrapRtlIsolates } from "@/lib/i18n/text-direction";
+
 export function TranscriptEditor({
   visitId,
   initialText,
@@ -49,7 +52,7 @@ export function TranscriptEditor({
         const response = await fetch(`/api/visits/${visitId}/transcript`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: value }),
+          body: JSON.stringify({ text: stripBidiMarks(value) }),
         });
         setNote(response.ok ? labels.saved : labels.lost);
       } catch {
@@ -67,7 +70,7 @@ export function TranscriptEditor({
       const response = await fetch(`/api/visits/${visitId}/transcript`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: value }),
+        body: JSON.stringify({ text: stripBidiMarks(value) }),
       });
       setNote(response.ok ? labels.saved : labels.lost);
     } catch {
@@ -78,6 +81,10 @@ export function TranscriptEditor({
   }
 
   const showingOriginal = view === "original" && canCompare;
+  const displayText = showingOriginal ? originalText ?? "" : text;
+  const direction = textDirection(displayText);
+  const fieldClass = `min-h-72 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink outline-none ${BIDI_TEXT_CLASS}`;
+  const readOnly = locked || showingOriginal;
 
   return (
     <div className="flex flex-col gap-3">
@@ -97,20 +104,25 @@ export function TranscriptEditor({
       </div>
       <p className="text-xs leading-5 text-muted">{labels.note}</p>
       {highlight && !showingOriginal ? (
-        <p className="rounded-2xl bg-field px-4 py-3 text-sm leading-6 text-ink">
-          <span className="block text-xs font-semibold text-accent">{labels.source}</span>
-          <mark className="bg-transparent font-medium text-ink">{highlight}</mark>
-        </p>
+        <div className={`rounded-2xl bg-field px-4 py-3 text-sm leading-6 text-ink ${BIDI_TEXT_CLASS}`}>
+          <span className="mb-1 block text-xs font-semibold text-accent">{labels.source}</span>
+          <BidiRichText text={highlight} className="font-medium text-ink" />
+        </div>
       ) : null}
-      <textarea
-        value={showingOriginal ? originalText ?? "" : text}
-        readOnly={locked || showingOriginal}
-        onChange={(event) => setText(event.target.value)}
-        onBlur={() => {
-          if (!locked && !showingOriginal && text !== initialText) void save(text);
-        }}
-        className="min-h-72 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink outline-none"
-      />
+      {readOnly ? (
+        <BidiRichText text={displayText} className={fieldClass} />
+      ) : (
+        <textarea
+          dir={direction}
+          lang={direction === "rtl" ? "he" : "fr"}
+          value={wrapRtlIsolates(text)}
+          onChange={(event) => setText(stripBidiMarks(event.target.value))}
+          onBlur={() => {
+            if (text !== initialText) void save(text);
+          }}
+          className={fieldClass}
+        />
+      )}
       {note ? <p className="text-sm text-muted">{saving ? labels.saving : note}</p> : null}
     </div>
   );

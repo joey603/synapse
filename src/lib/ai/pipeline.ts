@@ -9,6 +9,7 @@ import { diffValidated } from "@/lib/clinical/diff";
 import { composeReport } from "@/lib/clinical/compose-report";
 import { hebrewNeedsRewrite, scrubForbidden } from "@/lib/clinical/forbidden-phrases";
 import { reviewFlags } from "@/lib/clinical/review-flags";
+import { composeStructuredSections } from "@/lib/clinical/structured-report";
 import { validateExtraction } from "@/lib/clinical/validators";
 import { parseStored } from "@/lib/clinical/schema";
 import { db } from "@/lib/db";
@@ -259,6 +260,21 @@ async function generate(
 
   if (!text.trim()) throw new Error("generation_failed");
 
+  const meds = await db.medication.findMany({
+    where: { patientId: visit.patientId, active: true },
+    orderBy: { name: "asc" },
+    select: { name: true, dose: true, frequency: true },
+  });
+  const structured = composeStructuredSections({
+    extraction,
+    visitType: visit.type,
+    diagnosis: {
+      primary: visit.patient.primaryDiagnosis,
+      secondary: visit.patient.secondaryDiagnoses,
+    },
+    medications: meds,
+  });
+
   await db.clinicalReport.update({
     where: { visitId: visit.id },
     data: {
@@ -269,6 +285,7 @@ async function generate(
       provider: providerName(),
       model,
       promptVersion: REPORT_PROMPT,
+      ...structured,
     },
   });
   await db.clinicalExtraction.update({

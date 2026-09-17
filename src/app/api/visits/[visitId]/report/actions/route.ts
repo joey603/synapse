@@ -6,6 +6,7 @@ import { appUrl, getSession, isSameOrigin } from "@/lib/auth/session";
 import { composeReport } from "@/lib/clinical/compose-report";
 import { scrubForbidden } from "@/lib/clinical/forbidden-phrases";
 import { parseStored } from "@/lib/clinical/schema";
+import { composeStructuredSections } from "@/lib/clinical/structured-report";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { PROMPT_VERSION } from "../../../../../../../prompts/nursing-report-he";
@@ -16,7 +17,11 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
   const { visitId } = await context.params;
   const visit = await db.visit.findUnique({
     where: { id: visitId },
-    include: { report: true, extraction: true, patient: true },
+    include: {
+      report: true,
+      extraction: true,
+      patient: { include: { medications: { where: { active: true }, orderBy: { name: "asc" } } } },
+    },
   });
   const back = visit ? `/patients/${visit.patientId}/visits/${visit.id}?tab=report` : "/patients";
   if (!isSameOrigin(request)) return NextResponse.redirect(appUrl(request, back), 303);
@@ -66,11 +71,30 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
 
     if (!text.trim()) throw new Error("empty");
     const reviewed = action !== "regenerate";
+    const structured =
+      action === "regenerate"
+        ? composeStructuredSections({
+            extraction,
+            visitType: visit.type,
+            diagnosis: {
+              primary: visit.patient.primaryDiagnosis,
+              secondary: visit.patient.secondaryDiagnoses,
+            },
+            medications: visit.patient.medications,
+          })
+        : null;
     await db.clinicalReport.update({
       where: { id: visit.report.id },
       data: reviewed
         ? { editedDraft: text, status: "REVIEWED", promptVersion: PROMPT_VERSION }
-        : { aiDraft: text, editedDraft: text, status: "AI_GENERATED", finalText: null, promptVersion: PROMPT_VERSION },
+        : {
+            aiDraft: text,
+            editedDraft: text,
+            status: "AI_GENERATED",
+            finalText: null,
+            promptVersion: PROMPT_VERSION,
+            ...(structured ?? {}),
+          },
     });
     await audit({
       actorId: session.user.id,

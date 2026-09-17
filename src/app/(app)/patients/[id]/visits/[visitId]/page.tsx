@@ -8,7 +8,7 @@ import { AudioUploader } from "@/components/visits/AudioUploader";
 import { LiveRecorder } from "@/components/visits/LiveRecorder";
 import { PipelineProgress } from "@/components/visits/PipelineProgress";
 import { TaskPanel } from "@/components/tasks/TaskPanel";
-import { ReportEditor } from "@/components/visits/ReportEditor";
+import { StructuredTransmission } from "@/components/visits/StructuredTransmission";
 import { TranscriptEditor } from "@/components/visits/TranscriptEditor";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -18,9 +18,11 @@ import { visitTypeLabel } from "@/lib/clinical/templates";
 import { parseStored } from "@/lib/clinical/schema";
 import type { ClinicalFact, Evolution, EvidenceTime, FactDomain, Speaker } from "@/lib/clinical/types";
 import { CLINICAL_DOMAINS, EXAM_DOMAINS, RISK_DOMAINS } from "@/lib/clinical/types";
+import { getSession } from "@/lib/auth/session";
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
+import { formatJerusalemInput } from "@/lib/visits/time";
 import { workflowStatus } from "@/lib/visits/workflow-status";
 
 export default async function VisitPage({
@@ -34,12 +36,32 @@ export default async function VisitPage({
   const { audio, tab = "transcript", run, pipe, src } = await searchParams;
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
+  const session = await getSession();
   const visit = await db.visit.findFirst({
     ...join,
     where: { id: visitId, patientId: id },
     include: {
       patient: { include: { medications: { where: { active: true }, orderBy: { name: "asc" }, select: { name: true, dose: true } } } },
-      report: true,
+      report: {
+        select: {
+          id: true,
+          status: true,
+          templateKey: true,
+          aiDraft: true,
+          editedDraft: true,
+          finalText: true,
+          patientStatusNote: true,
+          drivingRisk: true,
+          diagnosisNote: true,
+          mainProblems: true,
+          currentMedication: true,
+          interventionsProvided: true,
+          carePlan: true,
+          validatedAt: true,
+          validatedById: true,
+          validatedBy: { select: { name: true } },
+        },
+      },
       recording: true,
       transcript: true,
       extraction: true,
@@ -61,6 +83,27 @@ export default async function VisitPage({
   const previousExtraction = parseStored(previous?.payload);
   const busy = ["TRANSCRIBING", "EXTRACTING", "GENERATING"].includes(visit.pipelineStatus);
   const validated = visit.report?.status === "VALIDATED";
+  const reportText =
+    (validated ? visit.report?.finalText ?? visit.report?.editedDraft : visit.report?.editedDraft) ??
+    visit.report?.aiDraft ??
+    "";
+  const hasReportText = reportText.trim().length > 0;
+  const showAudioControls = Boolean(visit.recording) || !validated;
+  const transmissionOnly = !visit.transcript && !visit.extraction && hasReportText;
+  const activeTab =
+    transmissionOnly && (tab === "transcript" || tab === "analysis") ? "report" : tab;
+  const visitBase = `/patients/${id}/visits/${visit.id}`;
+  const tabSegments = transmissionOnly
+    ? [
+        { id: "report", label: t(locale, "tabReport"), href: `${visitBase}?tab=report` },
+        { id: "tasks", label: t(locale, "filterTasks"), href: `${visitBase}?tab=tasks` },
+      ]
+    : [
+        { id: "transcript", label: t(locale, "tabTranscript"), href: `${visitBase}?tab=transcript` },
+        { id: "analysis", label: t(locale, "tabAnalysis"), href: `${visitBase}?tab=analysis` },
+        { id: "report", label: t(locale, "tabReport"), href: `${visitBase}?tab=report` },
+        { id: "tasks", label: t(locale, "filterTasks"), href: `${visitBase}?tab=tasks` },
+      ];
   const flow = workflowStatus({
     recordingStored: visit.recording?.status === "STORED",
     hasTranscript: Boolean(visit.transcript),
@@ -82,6 +125,21 @@ export default async function VisitPage({
               ? "workflowAudio"
               : "workflowDraft",
   );
+  const visitWhen = formatVisitWhen(visit.occurredAt, locale);
+  const validatedWhen = visit.report?.validatedAt
+    ? formatVisitWhen(visit.report.validatedAt, locale)
+    : visitWhen;
+  const wall = formatJerusalemInput(visit.occurredAt);
+  const visitDateLabel = new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
+    timeZone: "Asia/Jerusalem",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(visit.occurredAt);
+  const visitTimeLabel = wall.slice(11);
+  const reportAuthor =
+    visit.report?.validatedBy?.name ??
+    (session.status === "ok" ? session.user.name : "—");
 
   return (
     <div className="flex flex-col gap-5">
@@ -89,14 +147,25 @@ export default async function VisitPage({
         <div>
           <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, visitTypeLabel(visit.type))}</h1>
           <p className="mt-1 text-sm text-muted">
-            {visit.patient.firstName} {visit.patient.lastName} · {t(locale, "visitNext")}
+            {visit.patient.firstName} {visit.patient.lastName} · {visitWhen}
           </p>
+          {!validated && showAudioControls ? (
+            <p className="mt-1 text-sm text-muted">{t(locale, "visitNext")}</p>
+          ) : null}
         </div>
-        <span className="shrink-0 rounded-full bg-surface px-3 py-1 text-xs font-semibold text-muted">
+        <span
+          className={
+            validated
+              ? "shrink-0 rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent"
+              : "shrink-0 rounded-full bg-surface px-3 py-1 text-xs font-semibold text-muted"
+          }
+        >
           {statusLabel}
         </span>
       </header>
-      <AudioPanel locale={locale} visitId={visit.id} recording={visit.recording} audio={audio} />
+      {showAudioControls ? (
+        <AudioPanel locale={locale} visitId={visit.id} recording={visit.recording} audio={audio} />
+      ) : null}
       {visit.recording?.status === "STORED" || visit.transcript ? (
         <SurfaceCard className="flex flex-col gap-4 p-4">
           <PipelineProgress
@@ -140,61 +209,56 @@ export default async function VisitPage({
         </SurfaceCard>
       ) : null}
       <Suspense fallback={null}>
-        <SegmentedControl
-          scroll={false}
-          segments={[
-            { id: "transcript", label: t(locale, "tabTranscript"), href: `/patients/${id}/visits/${visit.id}?tab=transcript` },
-            { id: "analysis", label: t(locale, "tabAnalysis"), href: `/patients/${id}/visits/${visit.id}?tab=analysis` },
-            { id: "report", label: t(locale, "tabReport"), href: `/patients/${id}/visits/${visit.id}?tab=report` },
-            { id: "tasks", label: t(locale, "filterTasks"), href: `/patients/${id}/visits/${visit.id}?tab=tasks` },
-          ]}
-        />
+        <SegmentedControl scroll={false} segments={tabSegments} />
       </Suspense>
-      {tab === "tasks" ? (
+      {activeTab === "tasks" ? (
         <TaskPanel
           locale={locale}
           patientId={id}
           visitId={visit.id}
           tasks={tasks}
-          next={`/patients/${id}/visits/${visit.id}?tab=tasks`}
+          next={`${visitBase}?tab=tasks`}
         />
-      ) : visit.transcript ? (
-        <>
-          {tab === "analysis" ? (
-            extraction ? (
-              <>
-                <AnalysisPanel
-                  locale={locale}
-                  visitId={visit.id}
-                  patientId={id}
-                  extraction={extraction}
-                  previous={previousExtraction}
-                  chart={visit.patient.medications}
-                />
-                <AnalysisExtras locale={locale} patientId={id} visitId={visit.id} extraction={extraction} />
-              </>
-            ) : (
-              <p className="text-sm text-muted">{t(locale, "analysisEmpty")}</p>
-            )
-          ) : tab === "report" && visit.report?.editedDraft ? (
-            <>
-              {extraction ? (
-                <ReviewBanner
-                  locale={locale}
-                  patientId={id}
-                  visitId={visit.id}
-                  extraction={extraction}
-                  chart={visit.patient.medications}
-                  previous={previousExtraction}
-                />
-              ) : null}
-            <ReportEditor
+      ) : activeTab === "report" ? (
+        hasReportText && visit.report ? (
+          <>
+            {extraction ? (
+              <ReviewBanner
+                locale={locale}
+                patientId={id}
+                visitId={visit.id}
+                extraction={extraction}
+                chart={visit.patient.medications}
+                previous={previousExtraction}
+              />
+            ) : null}
+            <StructuredTransmission
+              key={`structured-${visit.id}-${visit.report.mainProblems?.length ?? 0}-${visit.report.patientStatusNote?.length ?? 0}`}
               visitId={visit.id}
-              initialText={visit.report.status === "VALIDATED" ? visit.report.finalText ?? visit.report.editedDraft : visit.report.editedDraft}
+              initialText={reportText}
               validated={visit.report.status === "VALIDATED"}
               status={visit.report.status}
+              validatedAtLabel={visit.report.status === "VALIDATED" ? validatedWhen : null}
+              visitMeta={{
+                typeLabel: t(locale, visitTypeLabel(visit.type)),
+                authorName: reportAuthor,
+                dateLabel: visitDateLabel,
+                timeLabel: visitTimeLabel,
+              }}
+              initialDurationMinutes={visit.durationMinutes}
+              initialStructured={{
+                patientStatusNote: visit.report.patientStatusNote ?? "",
+                drivingRisk: visit.report.drivingRisk,
+                diagnosisNote: visit.report.diagnosisNote ?? "",
+                mainProblems: visit.report.mainProblems ?? "",
+                currentMedication: visit.report.currentMedication ?? "",
+                interventionsProvided: visit.report.interventionsProvided ?? "",
+                carePlan: visit.report.carePlan ?? "",
+              }}
               labels={{
                 copy: t(locale, "copyReport"),
+                copyBlock: t(locale, "copyBlock"),
+                copied: t(locale, "copiedBlock"),
                 copyWarn: t(locale, "copyUnvalidated"),
                 validate: t(locale, "validateReport"),
                 regenerate: t(locale, "regenerate"),
@@ -206,36 +270,77 @@ export default async function VisitPage({
                 lost: t(locale, "saveLost"),
                 help: t(locale, "reportHelp"),
                 confirmNeeded: visit.report.status === "REVIEWED" || pipe === "confirm",
+                validatedBadge: t(locale, "workflowValidated"),
+                visitInfo: t(locale, "structuredVisitInfo"),
+                visitType: t(locale, "structuredVisitType"),
+                author: t(locale, "structuredAuthor"),
+                date: t(locale, "structuredDate"),
+                time: t(locale, "structuredTime"),
+                duration: t(locale, "structuredDuration"),
+                durationUnit: t(locale, "structuredDurationUnit"),
+                patientStatus: t(locale, "structuredPatientStatus"),
+                drivingRisk: t(locale, "structuredDrivingRisk"),
+                diagnosis: t(locale, "structuredDiagnosis"),
+                mainProblems: t(locale, "structuredMainProblems"),
+                currentMedication: t(locale, "structuredMedication"),
+                interventions: t(locale, "structuredInterventions"),
+                carePlan: t(locale, "structuredCarePlan"),
+                fullTransmission: t(locale, "structuredFullReport"),
+                emptySection: t(locale, "structuredEmpty"),
+                drivingLabels: {
+                  NOT_ASSESSED: t(locale, "drivingNotAssessed"),
+                  NO_RISK_IDENTIFIED: t(locale, "drivingNoRisk"),
+                  POSSIBLE_RISK: t(locale, "drivingPossible"),
+                  RISK_IDENTIFIED: t(locale, "drivingIdentified"),
+                  UNCLEAR: t(locale, "drivingUnclear"),
+                },
               }}
             />
-            </>
-          ) : tab === "report" ? (
-            <p className="text-sm text-muted">{t(locale, "analysisEmpty")}</p>
-          ) : (
-            <SurfaceCard className="p-4">
-              <TranscriptEditor
-                visitId={visit.id}
-                initialText={visit.transcript.rawText}
-                originalText={visit.transcript.providerText}
-                locked={validated}
-                edited={Boolean(visit.transcript.editedAt)}
-                highlight={src}
-                labels={{
-                  raw: t(locale, "transcriptRaw"),
-                  edited: t(locale, "transcriptEdited"),
-                  note: t(locale, "transcriptNote"),
-                  saving: t(locale, "transcriptSaving"),
-                  saved: t(locale, "transcriptSaved"),
-                  lost: t(locale, "saveLost"),
-                  source: t(locale, "seeSource"),
-                  original: t(locale, "originalTranscript"),
-                  corrected: t(locale, "correctedTranscript"),
-                }}
-              />
-            </SurfaceCard>
-          )}
-        </>
-      ) : null}
+          </>
+        ) : (
+          <p className="text-sm text-muted">{t(locale, "analysisEmpty")}</p>
+        )
+      ) : activeTab === "analysis" ? (
+        extraction ? (
+          <>
+            <AnalysisPanel
+              locale={locale}
+              visitId={visit.id}
+              patientId={id}
+              extraction={extraction}
+              previous={previousExtraction}
+              chart={visit.patient.medications}
+            />
+            <AnalysisExtras locale={locale} patientId={id} visitId={visit.id} extraction={extraction} />
+          </>
+        ) : (
+          <p className="text-sm text-muted">{t(locale, "analysisEmpty")}</p>
+        )
+      ) : visit.transcript ? (
+        <SurfaceCard className="p-4">
+          <TranscriptEditor
+            visitId={visit.id}
+            initialText={visit.transcript.rawText}
+            originalText={visit.transcript.providerText}
+            locked={validated}
+            edited={Boolean(visit.transcript.editedAt)}
+            highlight={src}
+            labels={{
+              raw: t(locale, "transcriptRaw"),
+              edited: t(locale, "transcriptEdited"),
+              note: t(locale, "transcriptNote"),
+              saving: t(locale, "transcriptSaving"),
+              saved: t(locale, "transcriptSaved"),
+              lost: t(locale, "saveLost"),
+              source: t(locale, "seeSource"),
+              original: t(locale, "originalTranscript"),
+              corrected: t(locale, "correctedTranscript"),
+            }}
+          />
+        </SurfaceCard>
+      ) : (
+        <p className="text-sm text-muted">{t(locale, "analysisEmpty")}</p>
+      )}
     </div>
   );
 }
@@ -720,4 +825,15 @@ const REVIEW_KEYS: Record<ReviewItemCode, MessageKey> = {
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+function formatVisitWhen(date: Date, locale: ReturnType<typeof resolveLocale>) {
+  return new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
+    timeZone: "Asia/Jerusalem",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }

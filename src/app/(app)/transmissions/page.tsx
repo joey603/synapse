@@ -7,6 +7,7 @@ import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
+import { BIDI_TEXT_CLASS, textDirection } from "@/lib/i18n/text-direction";
 
 export default async function TransmissionsPage() {
   const store = await cookies();
@@ -59,7 +60,10 @@ export default async function TransmissionsPage() {
                     </span>
                   </span>
                   {preview ? (
-                    <span dir="rtl" className="line-clamp-2 text-right text-sm leading-6 text-ink">
+                    <span
+                      dir={textDirection(preview)}
+                      className={`line-clamp-2 text-sm leading-6 text-ink ${BIDI_TEXT_CLASS}`}
+                    >
                       {preview}
                     </span>
                   ) : null}

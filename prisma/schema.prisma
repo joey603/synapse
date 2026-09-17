@@ -77,6 +77,14 @@ enum ReportStatus {
   VALIDATED
 }
 
+enum DrivingRiskStatus {
+  NOT_ASSESSED
+  NO_RISK_IDENTIFIED
+  POSSIBLE_RISK
+  RISK_IDENTIFIED
+  UNCLEAR
+}
+
 enum RetentionPolicy {
   KEEP
   DELETE_AFTER_TRANSCRIPTION
@@ -164,24 +172,25 @@ model Patient {
 }
 
 model Visit {
-  id             String         @id @default(cuid())
-  patientId      String
-  type           VisitType
-  occurredAt     DateTime
-  notes          String?
-  pipelineStatus PipelineStatus @default(IDLE)
-  failureCode    String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  patientId       String
+  type            VisitType
+  occurredAt      DateTime
+  durationMinutes Int?
+  notes           String?
+  pipelineStatus  PipelineStatus @default(IDLE)
+  failureCode     String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  patient        Patient              @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  recording      AudioRecording?
-  transcript     Transcript?
-  extraction     ClinicalExtraction?
-  report         ClinicalReport?
-  tasks          Task[]
-  events         ClinicalEvent[]
-  auditLogs      AuditLog[]
+  patient         Patient              @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  recording       AudioRecording?
+  transcript      Transcript?
+  extraction      ClinicalExtraction?
+  report          ClinicalReport?
+  tasks           Task[]
+  events          ClinicalEvent[]
+  auditLogs       AuditLog[]
 
   @@index([patientId, occurredAt])
   @@index([pipelineStatus])
@@ -235,23 +244,31 @@ model ClinicalExtraction {
 }
 
 model ClinicalReport {
-  id            String       @id @default(cuid())
-  visitId       String       @unique
-  status        ReportStatus @default(DRAFT)
-  templateKey   String
-  promptVersion String?
-  provider      String?
-  model         String?
-  aiDraft       String?
-  editedDraft   String?
-  finalText     String?
-  validatedAt   DateTime?
-  validatedById String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                     String             @id @default(cuid())
+  visitId                String             @unique
+  status                 ReportStatus       @default(DRAFT)
+  templateKey            String
+  promptVersion          String?
+  provider               String?
+  model                  String?
+  aiDraft                String?
+  editedDraft            String?
+  finalText              String?
+  /// Projections structurées (hébreu professionnel) dérivées du JSON clinique — éditables jusqu’à VALIDATED.
+  patientStatusNote      String?
+  drivingRisk            DrivingRiskStatus  @default(NOT_ASSESSED)
+  diagnosisNote          String?
+  mainProblems           String?
+  currentMedication      String?
+  interventionsProvided  String?
+  carePlan               String?
+  validatedAt            DateTime?
+  validatedById          String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
-  visit         Visit        @relation(fields: [visitId], references: [id], onDelete: Restrict)
-  validatedBy   User?        @relation("ValidatedBy", fields: [validatedById], references: [id])
+  visit                  Visit              @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  validatedBy            User?              @relation("ValidatedBy", fields: [validatedById], references: [id])
 
   @@index([status])
 }
