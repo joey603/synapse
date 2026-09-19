@@ -16,6 +16,7 @@ export function VisitForm({
   notes,
   error,
   submitLabel,
+  dockSubmit = false,
 }: {
   locale: Locale;
   action: string;
@@ -33,9 +34,15 @@ export function VisitForm({
   notes?: string | null;
   error?: "invalid" | "save" | null;
   submitLabel: string;
+  /** Colle le bouton d’envoi en bas, juste au-dessus de la barre de navigation. */
+  dockSubmit?: boolean;
 }) {
   return (
-    <form action={action} method="post" className="flex flex-col gap-4">
+    <form
+      action={action}
+      method="post"
+      className="flex flex-col gap-4"
+    >
       {patientId ? <input type="hidden" name="patientId" value={patientId} /> : null}
       {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       {patients ? (
@@ -111,11 +118,23 @@ export function VisitForm({
         </label>
       </SurfaceCard>
 
-      <div className="sticky bottom-0 z-10 -mx-5 bg-surface px-5 pb-1 pt-2">
-        <button type="submit" className="min-h-12 w-full rounded-2xl bg-accent text-sm font-semibold text-white">
+      <div
+        className={
+          dockSubmit
+            ? "pointer-events-none fixed inset-x-0 bottom-[calc(5.15rem+env(safe-area-inset-bottom))] z-20 mx-auto w-full max-w-lg px-5"
+            : "sticky bottom-0 z-10 -mx-5 bg-surface px-5 pb-1 pt-2"
+        }
+      >
+        <button
+          type="submit"
+          className={`min-h-12 w-full rounded-2xl bg-accent text-sm font-semibold text-white ${
+            dockSubmit ? "pointer-events-auto shadow-nav" : ""
+          }`}
+        >
           {submitLabel}
         </button>
       </div>
+      {dockSubmit ? <div className="h-16 shrink-0" aria-hidden /> : null}
     </form>
   );
 }

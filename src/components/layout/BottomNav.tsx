@@ -6,6 +6,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { Locale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
+import { requestVisitFlushSave } from "@/lib/visits/flush-save";
+import { Button } from "@/components/ui/Button";
 
 type PatientNav = {
   id: string;
@@ -30,6 +32,7 @@ type NavItem = {
 export function BottomNav({ locale }: { locale: Locale }) {
   const pathname = usePathname();
   const patientId = patientIdFromPath(pathname);
+  const visitId = visitIdFromPath(pathname);
   const [patient, setPatient] = useState<PatientNav | null>(null);
 
   useEffect(() => {
@@ -52,6 +55,17 @@ export function BottomNav({ locale }: { locale: Locale }) {
       stop = true;
     };
   }, [patientId]);
+
+  if (patientId && visitId) {
+    return (
+      <Shell>
+        <BackButton label={t(locale, "navBack")} fallback={`/patients/${patientId}`} />
+        <VisitDeleteButton locale={locale} visitId={visitId} patientId={patientId} />
+        <VisitSaveButton locale={locale} />
+        <NavLink href={`/patients/${patientId}/visits/new`} label={t(locale, "navVisit")} icon={VisitIcon} accent />
+      </Shell>
+    );
+  }
 
   if (patientId) {
     const callHref = telHref(patient?.phone ?? null);
@@ -88,6 +102,137 @@ export function BottomNav({ locale }: { locale: Locale }) {
         ),
       )}
     </Shell>
+  );
+}
+
+function VisitSaveButton({ locale }: { locale: Locale }) {
+  const [flash, setFlash] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        requestVisitFlushSave();
+        setFlash(true);
+        window.setTimeout(() => setFlash(false), 1200);
+      }}
+      className={`${NAV_ITEM} ${flash ? "text-accent" : "text-faint active:text-accent"}`}
+    >
+      <SaveIcon />
+      <span className="w-full truncate text-center leading-3">
+        {flash ? t(locale, "saveQuiet") : t(locale, "navSave")}
+      </span>
+    </button>
+  );
+}
+
+function VisitDeleteButton({
+  locale,
+  visitId,
+  patientId,
+}: {
+  locale: Locale;
+  visitId: string;
+  patientId: string;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirmDelete() {
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/visits/${visitId}/delete`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "",
+        redirect: "follow",
+      });
+      if (!response.ok) {
+        setError(t(locale, "saveLost"));
+        setPending(false);
+        return;
+      }
+      const url = new URL(response.url);
+      if (url.searchParams.get("error") === "locked") {
+        setError(t(locale, "navDeleteLocked"));
+        setPending(false);
+        return;
+      }
+      if (url.searchParams.get("error")) {
+        setError(t(locale, "saveLost"));
+        setPending(false);
+        return;
+      }
+      setOpen(false);
+      router.push(url.pathname + url.search || `/patients/${patientId}`);
+      router.refresh();
+    } catch {
+      setError(t(locale, "saveLost"));
+      setPending(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+        className={`${NAV_ITEM} text-danger disabled:opacity-40`}
+      >
+        <TrashIcon />
+        <span className="w-full truncate text-center leading-3">{t(locale, "navDelete")}</span>
+      </button>
+
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center"
+          role="presentation"
+          onClick={() => {
+            if (!pending) setOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="visit-delete-title"
+            className="w-full max-w-sm rounded-synapse-lg border border-line/80 bg-card p-5 shadow-nav"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="visit-delete-title" className="text-base font-semibold text-ink">
+              {t(locale, "navDeleteTitle")}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted">{t(locale, "navDeleteConfirm")}</p>
+            {error ? (
+              <p className="mt-3 rounded-2xl bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <div className="mt-5 flex flex-col gap-2">
+              <Button type="button" variant="danger" size="md" disabled={pending} onClick={() => void confirmDelete()}>
+                {pending ? t(locale, "loading") : t(locale, "navDelete")}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                disabled={pending}
+                onClick={() => setOpen(false)}
+              >
+                {t(locale, "cancel")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -282,6 +427,13 @@ function patientIdFromPath(pathname: string) {
   return match[1];
 }
 
+function visitIdFromPath(pathname: string) {
+  const match = pathname.match(/^\/patients\/[^/]+\/visits\/([^/]+)/);
+  if (!match) return null;
+  if (match[1] === "new") return null;
+  return match[1];
+}
+
 function telHref(phone: string | null) {
   if (!phone) return null;
   const first = phone.split("/")[0]?.trim() ?? "";
@@ -355,6 +507,34 @@ function CallIcon() {
         d="M8.2 4.8c.5-.5 1.3-.6 1.9-.3l1.6.8c.6.3.9 1 .7 1.6l-.5 1.7c-.1.5 0 1 .4 1.3l1.9 1.5c.3.3.8.4 1.3.3l1.7-.4c.7-.2 1.4.1 1.7.7l.9 1.5c.4.6.3 1.4-.2 1.9l-1.1 1.1c-.5.5-1.2.7-1.9.6-2-.3-4.3-1.7-6.5-3.9S5.4 11.3 5.1 9.3c-.1-.7.1-1.4.6-1.9l1.1-1.1Z"
         stroke="currentColor"
         strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden="true">
+      <path
+        d="M6.2 4.5h9.3L19.5 8.5v11c0 .8-.7 1.5-1.5 1.5H6.2c-.8 0-1.5-.7-1.5-1.5V6c0-.8.7-1.5 1.5-1.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path d="M8.5 4.5V9h7V4.5M8.5 19.5v-5h7v5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden="true">
+      <path
+        d="M5 7.5h14M9.5 7.5V5.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7M16.5 7.5l-.6 11.2c0 .7-.6 1.3-1.3 1.3H9.4c-.7 0-1.3-.6-1.3-1.3L7.5 7.5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>

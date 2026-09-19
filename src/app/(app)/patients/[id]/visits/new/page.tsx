@@ -39,6 +39,7 @@ export default async function NewVisitPage({
         occurredAt={jerusalemNowInput()}
         error={error === "save" ? "save" : error === "invalid" ? "invalid" : null}
         submitLabel={t(locale, "createVisit")}
+        dockSubmit
       />
     </div>
   );

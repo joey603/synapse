@@ -227,12 +227,22 @@ export function clearSessionCookie(response: NextResponse) {
 }
 
 export function isSameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (!origin || !host) return false;
+  if (!host) return false;
 
+  const origin = request.headers.get("origin");
+  if (origin) {
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
+    }
+  }
+
+  const referer = request.headers.get("referer");
+  if (!referer) return false;
   try {
-    return new URL(origin).host === host;
+    return new URL(referer).host === host;
   } catch {
     return false;
   }

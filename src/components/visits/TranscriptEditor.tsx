@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { BidiRichText } from "@/components/ui/BidiRichText";
 import { BIDI_TEXT_CLASS, stripBidiMarks, textDirection, wrapRtlIsolates } from "@/lib/i18n/text-direction";
+import { VISIT_FLUSH_SAVE_EVENT } from "@/lib/visits/flush-save";
 
 export function TranscriptEditor({
   visitId,
@@ -38,31 +39,6 @@ export function TranscriptEditor({
   const [view, setView] = useState<"corrected" | "original">("corrected");
   const canCompare = Boolean(originalText && originalText !== initialText);
 
-  useEffect(() => {
-    if (locked || text === initialText) return;
-    const timer = window.setTimeout(() => {
-      void persist(text);
-    }, 700);
-    return () => window.clearTimeout(timer);
-
-    async function persist(value: string) {
-      setSaving(true);
-      setNote(labels.saving);
-      try {
-        const response = await fetch(`/api/visits/${visitId}/transcript`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: stripBidiMarks(value) }),
-        });
-        setNote(response.ok ? labels.saved : labels.lost);
-      } catch {
-        setNote(labels.lost);
-      } finally {
-        setSaving(false);
-      }
-    }
-  }, [initialText, labels.lost, labels.saved, labels.saving, locked, text, visitId]);
-
   async function save(value: string) {
     setSaving(true);
     setNote(labels.saving);
@@ -79,6 +55,25 @@ export function TranscriptEditor({
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (locked || text === initialText) return;
+    const timer = window.setTimeout(() => {
+      void save(text);
+    }, 700);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce on text only
+  }, [initialText, locked, text, visitId]);
+
+  useEffect(() => {
+    if (locked) return;
+    function onFlush() {
+      void save(text);
+    }
+    window.addEventListener(VISIT_FLUSH_SAVE_EVENT, onFlush);
+    return () => window.removeEventListener(VISIT_FLUSH_SAVE_EVENT, onFlush);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked, text, visitId]);
 
   const showingOriginal = view === "original" && canCompare;
   const displayText = showingOriginal ? originalText ?? "" : text;

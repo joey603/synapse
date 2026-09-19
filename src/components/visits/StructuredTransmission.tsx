@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { BIDI_TEXT_CLASS, stripBidiMarks, textDirection, wrapRtlIsolates } from "@/lib/i18n/text-direction";
+import { VISIT_FLUSH_SAVE_EVENT } from "@/lib/visits/flush-save";
 
 const DURATION_PRESETS = [20, 30, 45, 60] as const;
 
@@ -167,6 +168,15 @@ export function StructuredTransmission({
     initialStructured,
     persist,
   ]);
+
+  useEffect(() => {
+    if (validated) return;
+    function onFlush() {
+      void persist({ text, structured, durationMinutes: duration });
+    }
+    window.addEventListener(VISIT_FLUSH_SAVE_EVENT, onFlush);
+    return () => window.removeEventListener(VISIT_FLUSH_SAVE_EVENT, onFlush);
+  }, [validated, persist, text, structured, duration]);
 
   async function copyBlock(key: string, value: string) {
     try {
