@@ -11,6 +11,7 @@ import { scrubForbidden } from "@/lib/clinical/forbidden-phrases";
 import { reviewFlags } from "@/lib/clinical/review-flags";
 import { composeStructuredSections } from "@/lib/clinical/structured-report";
 import { validateExtraction } from "@/lib/clinical/validators";
+import { isUnrelatedVisitContent } from "@/lib/clinical/visit-relevance";
 import { parseStored } from "@/lib/clinical/schema";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
@@ -215,6 +216,19 @@ async function extract(
     throw new Error("extraction_failed");
   }
 
+  if (isUnrelatedVisitContent(validated, visit.transcript!.rawText)) {
+    await audit({
+      actorId,
+      action: "EXTRACT_FAILED",
+      entityType: "Visit",
+      entityId: visit.id,
+      patientId: visit.patientId,
+      visitId: visit.id,
+      metadata: { code: "unrelated_content", visitRelevance: validated.visitRelevance ?? null },
+    });
+    throw new Error("unrelated_content");
+  }
+
   const previous = await previousExtraction(visit.patientId, visit.id);
   validated.changes = diffValidated(validated, previous);
   validated.reviewFlags = reviewFlags(validated, context.medicationNames);
@@ -391,7 +405,12 @@ function reload(id: string) {
 
 function stableCode(error: unknown) {
   const message = error instanceof Error ? error.message : "";
-  if (message === "audio_missing" || message === "provider_unavailable" || message === "transcription_failed") {
+  if (
+    message === "audio_missing" ||
+    message === "provider_unavailable" ||
+    message === "transcription_failed" ||
+    message === "unrelated_content"
+  ) {
     return message;
   }
   if (message === "extraction_failed" || message === "generation_failed") return message;

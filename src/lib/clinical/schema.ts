@@ -68,6 +68,7 @@ export const extractionSchema = z.object({
   pointsToVerify: z.array(z.string()).optional(),
   suggestedTasks: z.array(z.string()).optional(),
   finalReportHe: z.string().nullable().optional(),
+  visitRelevance: z.enum(["clinical", "unrelated", "unclear"]).optional(),
 });
 
 export function coerceFact(raw: z.infer<typeof clinicalFactSchema> | undefined): ClinicalFact {
@@ -158,7 +159,13 @@ export function coerceExtraction(raw: unknown) {
     pointsToVerify: cleanLines(asStringArray(data.pointsToVerify)),
     suggestedTasks: cleanLines(asStringArray(data.suggestedTasks)),
     finalReportHe: typeof data.finalReportHe === "string" ? data.finalReportHe.trim() || null : null,
+    visitRelevance: readRelevance(data.visitRelevance),
   };
+}
+
+function readRelevance(value: unknown): "clinical" | "unrelated" | "unclear" | undefined {
+  if (value === "clinical" || value === "unrelated" || value === "unclear") return value;
+  return undefined;
 }
 
 function normalizeFactRaw(value: unknown): z.infer<typeof clinicalFactSchema> | undefined {
@@ -205,6 +212,7 @@ export function parseStored(payload: unknown): StoredExtraction | null {
     pointsToVerify: value.pointsToVerify ?? [],
     suggestedTasks: value.suggestedTasks ?? [],
     finalReportHe: value.finalReportHe ?? null,
+    visitRelevance: value.visitRelevance,
   };
 }
 

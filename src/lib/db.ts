@@ -13,9 +13,9 @@ export const db =
 /** Une seule requête SQL pour les `include`, au lieu d'un aller-retour par relation. */
 export const join = { relationLoadStrategy: "join" as const };
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = db;
-}
+// Toujours réutiliser le client (dev HMR + isolates Next) pour ne pas multiplier
+// les pools avec connection_limit=1 côté Supabase.
+globalForPrisma.prisma = db;
 
 const TRANSIENT = new Set(["P1001", "P1008", "P1017", "P2024"]);
 

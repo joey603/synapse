@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { AnalysisView } from "@/components/visits/AnalysisView";
-import { AudioUploader } from "@/components/visits/AudioUploader";
+import { FileImporter } from "@/components/visits/FileImporter";
 import { LiveRecorder } from "@/components/visits/LiveRecorder";
 import { PipelineProgress } from "@/components/visits/PipelineProgress";
 import { TaskPanel } from "@/components/tasks/TaskPanel";
@@ -22,7 +22,7 @@ import { parseStored } from "@/lib/clinical/schema";
 import type { ClinicalFact, Evolution, EvidenceTime, FactDomain, Speaker } from "@/lib/clinical/types";
 import { CLINICAL_DOMAINS, EXAM_DOMAINS, RISK_DOMAINS } from "@/lib/clinical/types";
 import { getSession } from "@/lib/auth/session";
-import { db, join } from "@/lib/db";
+import { db, join, withDbRetry } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
 import { formatJerusalemInput } from "@/lib/visits/time";
@@ -33,55 +33,60 @@ export default async function VisitPage({
   searchParams,
 }: {
   params: Promise<{ id: string; visitId: string }>;
-  searchParams: Promise<{ audio?: string; tab?: string; run?: string; pipe?: string; src?: string }>;
+  searchParams: Promise<{ audio?: string; txt?: string; tab?: string; run?: string; pipe?: string; src?: string }>;
 }) {
   const { id, visitId } = await params;
-  const { audio, tab = "transcript", run, pipe, src } = await searchParams;
+  const { audio, txt, tab = "transcript", run, pipe, src } = await searchParams;
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
   const session = await getSession();
-  const visit = await db.visit.findFirst({
-    ...join,
-    where: { id: visitId, patientId: id },
-    include: {
-      patient: { include: { medications: { where: { active: true }, orderBy: { name: "asc" }, select: { name: true, dose: true } } } },
-      report: {
-        select: {
-          id: true,
-          status: true,
-          templateKey: true,
-          aiDraft: true,
-          editedDraft: true,
-          finalText: true,
-          patientStatusNote: true,
-          drivingRisk: true,
-          diagnosisNote: true,
-          mainProblems: true,
-          currentMedication: true,
-          interventionsProvided: true,
-          carePlan: true,
-          validatedAt: true,
-          validatedById: true,
-          validatedBy: { select: { name: true } },
+  const visit = await withDbRetry(() =>
+    db.visit.findFirst({
+      ...join,
+      where: { id: visitId, patientId: id },
+      include: {
+        patient: { include: { medications: { where: { active: true }, orderBy: { name: "asc" }, select: { name: true, dose: true } } } },
+        report: {
+          select: {
+            id: true,
+            status: true,
+            templateKey: true,
+            aiDraft: true,
+            editedDraft: true,
+            finalText: true,
+            patientStatusNote: true,
+            drivingRisk: true,
+            diagnosisNote: true,
+            mainProblems: true,
+            currentMedication: true,
+            interventionsProvided: true,
+            carePlan: true,
+            validatedAt: true,
+            validatedById: true,
+            validatedBy: { select: { name: true } },
+          },
         },
+        recording: true,
+        transcript: true,
+        extraction: true,
       },
-      recording: true,
-      transcript: true,
-      extraction: true,
-    },
-  });
+    }),
+  );
   if (!visit) notFound();
-  const tasks = await db.task.findMany({
-    where: { patientId: id },
-    orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-    take: 100,
-  });
-
-  const previous = await db.clinicalExtraction.findFirst({
-    where: { visit: { patientId: id, id: { not: visit.id }, report: { status: "VALIDATED" } } },
-    orderBy: { createdAt: "desc" },
-    select: { payload: true },
-  });
+  const [tasks, previous] = await withDbRetry(() =>
+    Promise.all([
+      db.task.findMany({
+        where: { patientId: id },
+        orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+        take: 100,
+      }),
+      db.clinicalExtraction.findFirst({
+        where: { visit: { patientId: id, id: { not: visit.id }, report: { status: "VALIDATED" } } },
+        orderBy: { createdAt: "desc" },
+        select: { payload: true },
+      }),
+    ]),
+  );
   const extraction = parseStored(visit.extraction?.payload);
   const previousExtraction = parseStored(previous?.payload);
   const busy = ["TRANSCRIBING", "EXTRACTING", "GENERATING"].includes(visit.pipelineStatus);
@@ -159,13 +164,28 @@ export default async function VisitPage({
         <StatusBadge tone={validated ? "success" : toneForWorkflow(flow)}>{statusLabel}</StatusBadge>
       </header>
       {showAudioControls ? (
-        <AudioPanel locale={locale} visitId={visit.id} recording={visit.recording} audio={audio} />
+        <AudioPanel
+          locale={locale}
+          visitId={visit.id}
+          patientId={id}
+          recording={visit.recording}
+          audio={audio}
+          txt={txt}
+          canImportText={!visit.transcript && !validated && !busy}
+          importedText={
+            visit.transcript?.provider === "import"
+              ? { chars: visit.transcript.rawText.length }
+              : null
+          }
+          canDeleteTranscript={Boolean(visit.transcript) && !validated && !busy}
+        />
       ) : null}
       {visit.recording?.status === "STORED" || visit.transcript ? (
         <SurfaceCard className="flex flex-col gap-4 p-4">
           <PipelineProgress
             visitId={visit.id}
             status={visit.pipelineStatus}
+            failureCode={visit.failureCode}
             polling={run === "1" || ["TRANSCRIBING", "EXTRACTING", "GENERATING"].includes(visit.pipelineStatus)}
             labels={[
               t(locale, "stepUpload"),
@@ -189,7 +209,15 @@ export default async function VisitPage({
               </Button>
             </form>
           ) : null}
-          {!busy && !validated && visit.transcript ? (
+          {!busy && !validated && visit.transcript && !visit.extraction ? (
+            <form action={`/api/visits/${visit.id}/pipeline`} method="post">
+              <input type="hidden" name="mode" value="transcribe" />
+              <Button type="submit">
+                {visit.pipelineStatus === "FAILED" ? t(locale, "retryPipeline") : t(locale, "startPipeline")}
+              </Button>
+            </form>
+          ) : null}
+          {!busy && !validated && visit.transcript && visit.extraction ? (
             <form action={`/api/visits/${visit.id}/pipeline`} method="post" className="flex flex-col gap-3">
               <input type="hidden" name="mode" value="analyze" />
               <Button type="submit">{t(locale, "analyzeVisit")}</Button>
@@ -331,11 +359,17 @@ export default async function VisitPage({
 function AudioPanel({
   locale,
   visitId,
+  patientId,
   recording,
   audio,
+  txt,
+  canImportText,
+  importedText,
+  canDeleteTranscript,
 }: {
   locale: ReturnType<typeof resolveLocale>;
   visitId: string;
+  patientId: string;
   recording: {
     id: string;
     status: string;
@@ -344,9 +378,35 @@ function AudioPanel({
     sizeBytes: number;
   } | null;
   audio?: string;
+  txt?: string;
+  canImportText: boolean;
+  importedText: { chars: number } | null;
+  canDeleteTranscript: boolean;
 }) {
   const stored = recording?.status === "STORED" ? recording : null;
   const errorKey = audioErrorKey(audio);
+  const txtErrorKey = textImportErrorKey(txt);
+
+  const textCard =
+    importedText && canDeleteTranscript ? (
+      <SurfaceCard className="flex flex-col gap-4 p-4" id="import">
+        <div>
+          <h2 className="text-sm font-semibold text-ink">{t(locale, "textImportLabel")}</h2>
+          <p className="mt-1 text-sm leading-6 text-muted">{t(locale, "textImportKept")}</p>
+        </div>
+        <div>
+          <p className="truncate text-[15px] font-semibold text-ink">{t(locale, "textImportLabel")}</p>
+          <p className="text-sm text-muted">
+            {t(locale, "textImportChars").replace("{n}", importedText.chars.toLocaleString())}
+          </p>
+        </div>
+        <form action={`/api/visits/${visitId}/transcript`} method="post">
+          <button type="submit" className="min-h-12 w-full rounded-2xl bg-danger-soft text-sm font-semibold text-danger">
+            {t(locale, "audioDelete")}
+          </button>
+        </form>
+      </SurfaceCard>
+    ) : null;
 
   if (stored) {
     return (
@@ -356,23 +416,41 @@ function AudioPanel({
             {t(locale, errorKey)}
           </p>
         ) : null}
-        <SurfaceCard className="flex flex-col gap-4 p-4" id="audio">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">{t(locale, "audioTitle")}</h2>
-          <p className="mt-1 text-sm leading-6 text-muted">{t(locale, "audioKept")}</p>
-        </div>
-        <div>
-          <p className="truncate text-[15px] font-semibold text-ink">
-            {stored.originalFilename ?? stored.mimeType}
+        {txtErrorKey ? (
+          <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm leading-6 text-danger" role="alert">
+            {t(locale, txtErrorKey)}
           </p>
-          <p className="text-sm text-muted">{formatBytes(stored.sizeBytes)}</p>
-        </div>
-        <form action={`/api/recordings/${stored.id}`} method="post">
-          <button type="submit" className="min-h-12 w-full rounded-2xl bg-danger-soft text-sm font-semibold text-danger">
-            {t(locale, "audioDelete")}
-          </button>
-        </form>
-      </SurfaceCard>
+        ) : null}
+        <SurfaceCard className="flex flex-col gap-4 p-4" id="audio">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">{t(locale, "audioTitle")}</h2>
+            <p className="mt-1 text-sm leading-6 text-muted">{t(locale, "audioKept")}</p>
+          </div>
+          <div>
+            <p className="truncate text-[15px] font-semibold text-ink">
+              {stored.originalFilename ?? stored.mimeType}
+            </p>
+            <p className="text-sm text-muted">{formatBytes(stored.sizeBytes)}</p>
+          </div>
+          <form action={`/api/recordings/${stored.id}`} method="post">
+            <button type="submit" className="min-h-12 w-full rounded-2xl bg-danger-soft text-sm font-semibold text-danger">
+              {t(locale, "audioDelete")}
+            </button>
+          </form>
+          {canImportText ? (
+            <div className="border-t border-line/70 pt-4">
+              <FileImporter
+                visitId={visitId}
+                patientId={patientId}
+                locale={locale}
+                allowText
+                textOnly
+                embedded
+              />
+            </div>
+          ) : null}
+        </SurfaceCard>
+        {textCard}
       </div>
     );
   }
@@ -384,29 +462,31 @@ function AudioPanel({
           {t(locale, errorKey)}
         </p>
       ) : null}
-      <LiveRecorder
-        action={`/api/visits/${visitId}/audio`}
-        title={t(locale, "recordTitle")}
-        hint={t(locale, "recordHint")}
-        startLabel={t(locale, "recordStart")}
-        pauseLabel={t(locale, "recordPause")}
-        resumeLabel={t(locale, "recordResume")}
-        stopLabel={t(locale, "recordStop")}
-        cancelLabel={t(locale, "recordCancel")}
-        deniedLabel={t(locale, "recordDenied")}
-        unsupportedLabel={t(locale, "recordUnsupported")}
-        sendingLabel={t(locale, "recordSending")}
-        tooBigLabel={t(locale, "audioErrorSize")}
-        saveLabel={t(locale, "audioErrorSave")}
-      />
-      <AudioUploader
-        action={`/api/visits/${visitId}/audio`}
-        title={t(locale, "audioTitle")}
-        hint={t(locale, "audioHint")}
-        chooseLabel={t(locale, "audioChoose")}
-        submitLabel={t(locale, "audioSubmit")}
-        emptyLabel={t(locale, "audioEmpty")}
-      />
+      {txtErrorKey ? (
+        <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm leading-6 text-danger" role="alert">
+          {t(locale, txtErrorKey)}
+        </p>
+      ) : null}
+      {textCard ? null : (
+        <LiveRecorder
+          action={`/api/visits/${visitId}/audio`}
+          title={t(locale, "recordTitle")}
+          hint={t(locale, "recordHint")}
+          startLabel={t(locale, "recordStart")}
+          pauseLabel={t(locale, "recordPause")}
+          resumeLabel={t(locale, "recordResume")}
+          stopLabel={t(locale, "recordStop")}
+          cancelLabel={t(locale, "recordCancel")}
+          deniedLabel={t(locale, "recordDenied")}
+          unsupportedLabel={t(locale, "recordUnsupported")}
+          sendingLabel={t(locale, "recordSending")}
+          tooBigLabel={t(locale, "audioErrorSize")}
+          saveLabel={t(locale, "audioErrorSave")}
+        />
+      )}
+      {textCard ?? (
+        <FileImporter visitId={visitId} patientId={patientId} locale={locale} allowText={canImportText} />
+      )}
     </div>
   );
 }
@@ -429,6 +509,28 @@ function audioErrorKey(code: string | undefined) {
   }
 }
 
+function textImportErrorKey(code: string | undefined) {
+  switch (code) {
+    case "type":
+      return "textImportErrorType" as const;
+    case "size":
+      return "textImportErrorSize" as const;
+    case "empty":
+      return "textImportErrorEmpty" as const;
+    case "exists":
+      return "textImportErrorExists" as const;
+    case "locked":
+      return "textImportErrorLocked" as const;
+    case "busy":
+      return "textImportErrorBusy" as const;
+    case "save":
+    case "origin":
+      return "textImportErrorSave" as const;
+    default:
+      return null;
+  }
+}
+
 function pipeMessage(locale: ReturnType<typeof resolveLocale>, code: string | null | undefined) {
   const key = {
     transcription_failed: "pipeTranscriptionFailed",
@@ -437,6 +539,7 @@ function pipeMessage(locale: ReturnType<typeof resolveLocale>, code: string | nu
     generation_failed: "pipeGenerationFailed",
     audio_missing: "pipeAudioMissing",
     provider_unavailable: "pipeProvider",
+    unrelated_content: "pipeUnrelatedContent",
     confirm: "pipeConfirm",
   }[code ?? ""] as MessageKey | undefined;
   return key ? t(locale, key) : null;

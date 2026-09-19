@@ -169,7 +169,11 @@ export type StoredExtraction = {
   pointsToVerify: string[];
   suggestedTasks: string[];
   finalReportHe: string | null;
+  /** clinical = visite HAD pertinente ; unrelated = hors sujet (pas de transmission). */
+  visitRelevance?: VisitRelevance;
 };
+
+export type VisitRelevance = "clinical" | "unrelated" | "unclear";
 
 export function emptyFact(): ClinicalFact {
   return {

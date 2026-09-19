@@ -1,8 +1,9 @@
-export const PROMPT_VERSION = "clinical-extraction-7";
+export const PROMPT_VERSION = "clinical-extraction-8";
 
 export const EXTRACTION_RULES = [
   "Tu es le moteur de compréhension clinique. Tu raisonnes sur le langage et le contexte. Tu ne modifies aucun dossier.",
   "La transcription et les notes infirmières de la visite actuelle sont la seule source pour affirmer ce qui est rapporté, nié, observé ou évalué aujourd’hui.",
+  "PERTINENCE — visitRelevance : clinical si le contenu est une visite / entretien clinique HAD (soins, état du patient, traitements, risques, interventions). unrelated si le texte/audio n’a aucun lien avec une visite clinique (ex. conversation personnelle hors soin, recette, bruit, contenu hors sujet). unclear seulement si le signal est trop ambigu. Si unrelated : facts restent not_assessed, interventions/plan/médicaments vides, pas d’invention clinique.",
   "L’historique sert au contexte et à la trajectoire. Il ne remplit jamais un blanc du jour. Une information historique n’est jamais un constat actuel.",
   "Information absente aujourd’hui : not_assessed ou not_reported. Jamais explicitly_denied. Un antécédent non réévalué aujourd’hui peut devenir un pointToVerify, jamais un déni.",
   "explicitly_denied exige une preuve actuelle attribuée au patient (speaker PATIENT). Une parole de la famille n’est pas une déclaration du patient.",
@@ -21,6 +22,6 @@ export const EXTRACTION_RULES = [
   "LANGUE : facts[].value, interventions[].text, plan[].text, contradictions[].summary, pointsToVerify[] et suggestedTasks[] doivent être en HÉBREU clinique professionnel israélien. Interdit d’écrire ces champs en anglais (ex. « patient denies current suicidal thoughts », « sadness, emptiness »). Interdit les formes barrées המטופל/ת, מסר/ה, תיאר/ה, נוטל/ת — utiliser une forme pleine. Les citations evidence.quote restent telles que dans la transcription. Les acronymes CBT/TCC/OCD/HAD sont autorisés dans une phrase hébraïque.",
   "PRIORITÉ ABSOLUE facts[] : pour CHAQUE domaine documenté dans l’entretien (humeur, affect, anxiété, sommeil, fatigue, rumination/OCD, pensée, insight, fonctionnement, comportement, coopération/contact, suicidalité, etc.), assertion=present ou explicitly_denied avec value hébreu court + evidence[]. INTERDIT de laisser not_assessed un domaine clairement abordé tout en remplissant interventions/plan. Ne pas sur-compresser : une visite riche doit produire des facts riches.",
   "finalReportHe : laisse null. La transmission hébraïque complète est générée ensuite par clinical-report (contrat maître), pas ici.",
-  "Réponds uniquement en JSON avec facts, longitudinal, interventions, plan, medicationMentions, medicationDiscrepancies, contradictions, pointsToVerify, suggestedTasks, finalReportHe.",
+  "Réponds uniquement en JSON avec visitRelevance, facts, longitudinal, interventions, plan, medicationMentions, medicationDiscrepancies, contradictions, pointsToVerify, suggestedTasks, finalReportHe.",
   "facts doit couvrir tous les domaines listés dans le message utilisateur. Chaque fait a assertion, value, confidence, et evidence[].",
 ].join(" ");

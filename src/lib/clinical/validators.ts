@@ -1,5 +1,6 @@
 import { coerceExtraction } from "@/lib/clinical/schema";
 import { hebrewClinicalText } from "@/lib/clinical/hebrew-text";
+import { readVisitRelevance } from "@/lib/clinical/visit-relevance";
 import {
   FACT_DOMAINS,
   RISK_DOMAINS,
@@ -91,6 +92,7 @@ export function validateExtraction(
     pointsToVerify: prunedPoints.slice(0, 12),
     suggestedTasks: keepSuggestedTasks(coerced.suggestedTasks, transcript, nurseNotes, partial),
     finalReportHe: coerced.finalReportHe,
+    visitRelevance: readVisitRelevance(coerced.visitRelevance) ?? undefined,
   };
 }
 

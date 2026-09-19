@@ -11,6 +11,7 @@ type StepState = "pending" | "active" | "done" | "failed";
 export function PipelineProgress({
   visitId,
   status,
+  failureCode = null,
   labels,
   polling,
   workingLabel,
@@ -18,6 +19,7 @@ export function PipelineProgress({
 }: {
   visitId: string;
   status: string;
+  failureCode?: string | null;
   labels: [string, string, string, string];
   polling: boolean;
   workingLabel: string;
@@ -25,13 +27,16 @@ export function PipelineProgress({
 }) {
   const router = useRouter();
   const [current, setCurrent] = useState(status);
-  const [failedAt, setFailedAt] = useState<StepId | null>(null);
+  const [failedAt, setFailedAt] = useState<StepId | null>(() =>
+    status === "FAILED" ? stepForFailure(failureCode) : null,
+  );
   const [seenStatus, setSeenStatus] = useState(status);
 
   if (seenStatus !== status) {
     setSeenStatus(status);
     setCurrent(status);
-    if (status !== "FAILED") setFailedAt(null);
+    if (status === "FAILED") setFailedAt(stepForFailure(failureCode));
+    else setFailedAt(null);
   }
 
   useEffect(() => {
@@ -40,10 +45,10 @@ export function PipelineProgress({
     const timer = window.setInterval(async () => {
       const response = await fetch(`/api/visits/${visitId}/pipeline`);
       if (!response.ok) return;
-      const data = (await response.json()) as { pipelineStatus?: string };
+      const data = (await response.json()) as { pipelineStatus?: string; failureCode?: string | null };
       if (!data.pipelineStatus || data.pipelineStatus === current) return;
       if (data.pipelineStatus === "FAILED") {
-        setFailedAt(busyStep(current) ?? "transcribe");
+        setFailedAt(stepForFailure(data.failureCode) ?? busyStep(current) ?? "extract");
       }
       setCurrent(data.pipelineStatus);
       router.refresh();
@@ -130,6 +135,22 @@ function busyStep(status: string): StepId | null {
   if (status === "EXTRACTING") return "extract";
   if (status === "GENERATING") return "report";
   return null;
+}
+
+function stepForFailure(code: string | null | undefined): StepId {
+  switch (code) {
+    case "audio_missing":
+    case "transcription_failed":
+    case "provider_unavailable":
+      return "transcribe";
+    case "unrelated_content":
+    case "extraction_failed":
+      return "extract";
+    case "generation_failed":
+      return "report";
+    default:
+      return "extract";
+  }
 }
 
 function isDone(status: string, id: StepId) {
