@@ -9,6 +9,8 @@ import { t, type MessageKey } from "@/lib/i18n/messages";
 
 type Kind = "audio" | "text";
 
+const MAX_TEXT_BYTES = 200_000;
+
 export function FileImporter({
   visitId,
   patientId,
@@ -30,7 +32,12 @@ export function FileImporter({
   const [kind, setKind] = useState<Kind | null>(textOnly ? "text" : null);
   const [localError, setLocalError] = useState<MessageKey | null>(null);
   const [pending, setPending] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const pasteRef = useRef<HTMLTextAreaElement>(null);
+
+  const canPaste = allowText || textOnly;
 
   const accept = textOnly
     ? ".txt,.md,.text,.markdown,text/plain,text/markdown"
@@ -69,6 +76,47 @@ export function FileImporter({
     }
     setFile(next);
     setKind(detected);
+  }
+
+  function applyPastedText(raw: string) {
+    const text = raw.replace(/^\uFEFF/, "").trim();
+    if (!text) {
+      setLocalError("textImportErrorEmpty");
+      return false;
+    }
+    const next = new File([text], "presse-papiers.txt", { type: "text/plain" });
+    if (next.size > MAX_TEXT_BYTES) {
+      setLocalError("textImportErrorSize");
+      return false;
+    }
+    if (inputRef.current) inputRef.current.value = "";
+    setPasteOpen(false);
+    setPasteText("");
+    onPick(next);
+    return true;
+  }
+
+  async function onPasteClick() {
+    if (!canPaste || disabled || pending) return;
+    setLocalError(null);
+
+    if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (applyPastedText(text)) return;
+        // Vide : on laisse l’erreur empty et on ouvre la zone manuelle.
+      } catch {
+        // iOS / permission : bascule sur la zone de collage manuelle.
+      }
+    }
+
+    setPasteOpen(true);
+    window.setTimeout(() => pasteRef.current?.focus(), 0);
+  }
+
+  function onUsePaste() {
+    setLocalError(null);
+    applyPastedText(pasteText);
   }
 
   async function onSubmit(event: FormEvent) {
@@ -146,15 +194,46 @@ export function FileImporter({
           onChange={(event) => onPick(event.target.files?.[0] ?? null)}
         />
 
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          disabled={disabled || pending}
-          onClick={() => inputRef.current?.click()}
-        >
-          {t(locale, "audioChoose")}
-        </Button>
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            disabled={disabled || pending}
+            onClick={() => inputRef.current?.click()}
+          >
+            {t(locale, "audioChoose")}
+          </Button>
+          {canPaste ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              disabled={disabled || pending}
+              onClick={() => void onPasteClick()}
+            >
+              {t(locale, "textImportPaste")}
+            </Button>
+          ) : null}
+        </div>
+
+        {pasteOpen ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm leading-6 text-muted">{t(locale, "textImportPasteHint")}</p>
+            <textarea
+              ref={pasteRef}
+              value={pasteText}
+              onChange={(event) => setPasteText(event.target.value)}
+              disabled={disabled || pending}
+              rows={8}
+              className="min-h-40 w-full resize-y rounded-2xl border border-line bg-surface px-3 py-3 text-sm leading-6 text-ink"
+              dir="auto"
+            />
+            <Button type="button" size="md" disabled={disabled || pending || !pasteText.trim()} onClick={onUsePaste}>
+              {t(locale, "textImportPasteUse")}
+            </Button>
+          </div>
+        ) : null}
 
         <p className="truncate text-sm text-muted" title={file?.name} dir="ltr">
           {file

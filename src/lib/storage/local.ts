@@ -5,7 +5,10 @@ import path from "node:path";
 import { assertStorageKey } from "@/lib/storage/key";
 import type { StorageService } from "@/lib/storage/types";
 
-const ROOT = path.resolve(process.cwd(), "storage");
+const ROOT = path.resolve(
+  process.env.STORAGE_ROOT?.trim() ||
+    (process.env.VERCEL ? "/tmp/synapse-storage" : path.join(process.cwd(), "storage")),
+);
 
 export const localStorage: StorageService = {
   async put(key, body) {

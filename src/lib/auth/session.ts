@@ -227,24 +227,40 @@ export function clearSessionCookie(response: NextResponse) {
 }
 
 export function isSameOrigin(request: Request) {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const host = normalizeHost(request.headers.get("x-forwarded-host") ?? request.headers.get("host"));
   if (!host) return false;
 
   const origin = request.headers.get("origin");
   if (origin) {
     try {
-      return new URL(origin).host === host;
+      return normalizeHost(new URL(origin).host) === host;
     } catch {
       return false;
     }
   }
 
   const referer = request.headers.get("referer");
-  if (!referer) return false;
+  if (referer) {
+    try {
+      return normalizeHost(new URL(referer).host) === host;
+    } catch {
+      return false;
+    }
+  }
+
+  // Safari iOS omet parfois Origin/Referer sur un fetch same-origin.
+  const site = request.headers.get("sec-fetch-site");
+  return site === "same-origin" || site === "same-site";
+}
+
+function normalizeHost(value: string | null | undefined) {
+  if (!value) return "";
+  const first = value.split(",")[0]?.trim().toLowerCase() ?? "";
+  if (!first) return "";
   try {
-    return new URL(referer).host === host;
+    return new URL(`https://${first}`).host.toLowerCase();
   } catch {
-    return false;
+    return first;
   }
 }
 

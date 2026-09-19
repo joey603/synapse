@@ -25,6 +25,7 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
   const back = visit ? `/patients/${visit.patientId}/visits/${visit.id}` : "/patients";
 
   if (!isSameOrigin(request)) {
+    logger.info("audio.origin_rejected");
     return redirect(request, back, "save");
   }
 
@@ -43,17 +44,26 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
     return redirect(request, back, "exists");
   }
 
-  const form = await request.formData();
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch (error) {
+    logger.error("audio.formdata_failed", {
+      message: error instanceof Error ? error.message.slice(0, 160) : "unknown",
+    });
+    return redirect(request, back, "save");
+  }
+
   if (form.get("consent") !== "on") {
     return redirect(request, back, "consent");
   }
 
-  const file = form.get("file");
-  if (!(file instanceof File)) {
+  const upload = asUpload(form.get("file"));
+  if (!upload) {
     return redirect(request, back, "type");
   }
 
-  const checked = inspectAudioFile(file);
+  const checked = inspectAudioFile(upload);
   if (!checked.ok) {
     return redirect(request, back, checked.code === "size" ? "size" : "type");
   }
@@ -62,9 +72,9 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
   let stored = false;
 
   try {
-    const body = Buffer.from(await file.arrayBuffer());
-    if (body.byteLength !== file.size) {
-      return redirect(request, back, "save");
+    const body = Buffer.from(await upload.arrayBuffer());
+    if (body.byteLength <= 0) {
+      return redirect(request, back, "type");
     }
 
     await getStorage().put(key, body, checked.mimeType);
@@ -75,7 +85,7 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
           where: { id: visit.recording.id },
           data: {
             storageKey: key,
-            originalFilename: safeFilename(file.name),
+            originalFilename: safeFilename(upload.name),
             mimeType: checked.mimeType,
             sizeBytes: body.byteLength,
             status: "STORED",
@@ -89,7 +99,7 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
           data: {
             visitId: visit.id,
             storageKey: key,
-            originalFilename: safeFilename(file.name),
+            originalFilename: safeFilename(upload.name),
             mimeType: checked.mimeType,
             sizeBytes: body.byteLength,
             status: "STORED",
@@ -117,13 +127,33 @@ export async function POST(request: Request, context: { params: Promise<{ visitI
     });
 
     return NextResponse.redirect(appUrl(request, `${back}#audio`), 303);
-  } catch {
+  } catch (error) {
     if (stored) {
       await getStorage().delete(key).catch(() => undefined);
     }
-    logger.error("audio.upload_failed");
+    logger.error("audio.upload_failed", {
+      message: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+    });
     return redirect(request, back, "save");
   }
+}
+
+function asUpload(value: FormDataEntryValue | null): {
+  name: string;
+  type: string;
+  size: number;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+} | null {
+  if (!value || typeof value === "string") return null;
+  const blob = value as Blob & { name?: string };
+  if (typeof blob.arrayBuffer !== "function") return null;
+  if (typeof blob.size !== "number" || blob.size <= 0) return null;
+  return {
+    name: typeof blob.name === "string" ? blob.name : "",
+    type: typeof blob.type === "string" ? blob.type : "",
+    size: blob.size,
+    arrayBuffer: () => blob.arrayBuffer(),
+  };
 }
 
 function redirect(request: Request, back: string, code: string) {

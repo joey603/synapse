@@ -16,11 +16,17 @@ export function inspectAudioFile(file: { name: string; type: string; size: numbe
   if (file.size <= 0) return { ok: false, code: "empty" };
   if (file.size > MAX_AUDIO_BYTES) return { ok: false, code: "size" };
 
-  const ext = extension(file.name);
-  const rule = RULES.find((item) => item.ext === ext);
-  if (!rule) return { ok: false, code: "type" };
-
   const mime = file.type.trim().toLowerCase().split(";")[0] ?? "";
+  const ext = extension(file.name) || extensionFromMime(mime);
+  const rule = RULES.find((item) => item.ext === ext);
+  if (!rule) {
+    // iOS envoie parfois audio/mp4 sans extension exploitable.
+    if (mime === "audio/mp4" || mime === "audio/x-m4a" || mime === "audio/m4a") {
+      return { ok: true, mimeType: "audio/mp4" };
+    }
+    return { ok: false, code: "type" };
+  }
+
   const allowed = rule.mimes as readonly string[];
   const loose = mime === "" || mime === "application/octet-stream";
   if (!loose && !allowed.includes(mime)) {
@@ -35,6 +41,15 @@ function extension(name: string) {
   const dot = base.lastIndexOf(".");
   if (dot < 0) return "";
   return base.slice(dot + 1).toLowerCase();
+}
+
+function extensionFromMime(mime: string) {
+  if (mime === "audio/mp4" || mime === "audio/x-m4a" || mime === "audio/m4a") return "m4a";
+  if (mime === "audio/mpeg" || mime === "audio/mp3") return "mp3";
+  if (mime.startsWith("audio/wav") || mime === "audio/wave" || mime === "audio/x-wav") return "wav";
+  if (mime === "audio/aac" || mime === "audio/x-aac" || mime === "audio/aacp") return "aac";
+  if (mime === "audio/webm") return "webm";
+  return "";
 }
 
 export function safeFilename(name: string) {

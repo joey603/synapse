@@ -91,7 +91,10 @@ export function LiveRecorder({
       stream.current = live;
       const mime = pickMime();
       mimeUsed.current = mime.split(";")[0] || "audio/webm";
-      const media = mime ? new MediaRecorder(live, { mimeType: mime }) : new MediaRecorder(live);
+      // Débit bas pour rester sous la limite ~4,5 Mo des fonctions Vercel.
+      const options: MediaRecorderOptions = { audioBitsPerSecond: 48_000 };
+      if (mime) options.mimeType = mime;
+      const media = new MediaRecorder(live, options);
       chunks.current = [];
       media.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.current.push(event.data);
@@ -141,8 +144,12 @@ export function LiveRecorder({
     if (!media || media.state === "inactive") return;
     setPhase("sending");
     const blob = await new Promise<Blob>((resolve) => {
-      media.onstop = () =>
-        resolve(new Blob(chunks.current, { type: media.mimeType || mimeUsed.current }));
+      media.onstop = () => {
+        // iOS peut livrer le dernier chunk juste après onstop.
+        queueMicrotask(() =>
+          resolve(new Blob(chunks.current, { type: media.mimeType || mimeUsed.current })),
+        );
+      };
       if (media.state === "recording" && shouldUseTimeslice()) {
         try {
           media.requestData();
@@ -163,20 +170,37 @@ export function LiveRecorder({
       setPhase("idle");
       return;
     }
-    const type = (blob.type || mimeUsed.current || "audio/webm").split(";")[0] || "audio/webm";
+    const type = (blob.type || mimeUsed.current || "audio/mp4").split(";")[0] || "audio/mp4";
     const ext = type.includes("mp4") || type.includes("aac") || type.includes("m4a") ? "m4a" : "webm";
-    const file = new File([blob], `entretien.${ext}`, { type });
+    const filename = `entretien.${ext}`;
     const form = new FormData();
-    form.set("file", file);
+    // append(blob, filename) est plus fiable que `new File` sur iOS Safari.
+    form.append("file", blob, filename);
     form.set("consent", "on");
     try {
-      const response = await fetch(action, { method: "POST", body: form });
-      if (!response.ok && !response.redirected) {
+      const response = await fetch(action, {
+        method: "POST",
+        body: form,
+        credentials: "same-origin",
+        redirect: "follow",
+      });
+      const finalUrl = response.url || window.location.href;
+      let audioError: string | null = null;
+      try {
+        audioError = new URL(finalUrl, window.location.origin).searchParams.get("audio");
+      } catch {
+        audioError = null;
+      }
+      if (audioError) {
+        window.location.assign(finalUrl);
+        return;
+      }
+      if (!response.ok) {
         setError(saveLabel);
         setPhase("idle");
         return;
       }
-      window.location.assign(response.url);
+      window.location.assign(finalUrl);
     } catch {
       setError(saveLabel);
       setPhase("idle");
@@ -242,7 +266,12 @@ export function LiveRecorder({
 }
 
 function pickMime() {
-  const types = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
+  const types = [
+    "audio/mp4",
+    "audio/aac",
+    "audio/webm;codecs=opus",
+    "audio/webm",
+  ];
   return types.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
