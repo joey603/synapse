@@ -83,7 +83,7 @@ export function TranscriptEditor({
   const showingOriginal = view === "original" && canCompare;
   const displayText = showingOriginal ? originalText ?? "" : text;
   const direction = textDirection(displayText);
-  const fieldClass = `min-h-72 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink outline-none ${BIDI_TEXT_CLASS}`;
+  const fieldClass = `min-h-72 w-full synapse-field synapse-document-text px-4 py-4 ${BIDI_TEXT_CLASS}`;
   const readOnly = locked || showingOriginal;
 
   return (

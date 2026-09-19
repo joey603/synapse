@@ -8,6 +8,7 @@ import { PatientDetailTabs } from "@/components/patient/PatientDetailTabs";
 import { PatientTimeline } from "@/components/patient/PatientTimeline";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge, toneForPatientStatus } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { jerusalemDay } from "@/lib/clinical/cockpit";
 import { visitTypeLabel } from "@/lib/clinical/templates";
@@ -88,7 +89,7 @@ export default async function PatientDetailPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <SurfaceCard className="p-5">
+      <SurfaceCard variant="primary" className="p-5">
         <div className="flex items-start gap-4">
           <Avatar
             name={fullName}
@@ -97,16 +98,14 @@ export default async function PatientDetailPage({
           />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-3">
-              <h1 className="min-w-0 truncate text-xl font-semibold leading-tight text-ink">{fullName}</h1>
-              <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(patient.status)}`}>
-                {statusLabel}
-              </span>
+              <h1 className="min-w-0 truncate text-[1.35rem] font-semibold leading-tight text-ink">{fullName}</h1>
+              <StatusBadge tone={toneForPatientStatus(patient.status)}>{statusLabel}</StatusBadge>
             </div>
             {meta ? <p className="mt-1 text-sm text-muted">{meta}</p> : null}
           </div>
           <Link
             href={`/patients/${patient.id}/edit`}
-            className="shrink-0 rounded-full bg-surface px-3 py-2 text-sm font-semibold text-accent"
+            className="shrink-0 rounded-full bg-surface px-3 py-2 text-sm font-semibold text-accent ring-1 ring-line/70"
           >
             {t(locale, "editFile")}
           </Link>
@@ -185,12 +184,6 @@ function statusText(locale: ReturnType<typeof resolveLocale>, status: "ACTIVE" |
   if (status === "DISCHARGED") return t(locale, "patientDischarged");
   if (status === "INACTIVE") return t(locale, "patientInactive");
   return t(locale, "patientActive");
-}
-
-function statusTone(status: "ACTIVE" | "INACTIVE" | "DISCHARGED") {
-  if (status === "ACTIVE") return "bg-success-soft text-success";
-  if (status === "DISCHARGED") return "bg-surface text-muted";
-  return "bg-danger-soft text-danger";
 }
 
 function ageInYears(birthDate: Date, now = new Date()) {

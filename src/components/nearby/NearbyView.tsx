@@ -265,7 +265,7 @@ export function NearbyView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div dir="ltr" className="overflow-hidden rounded-3xl ring-1 ring-line">
+      <div dir="ltr" className="overflow-hidden rounded-synapse-lg ring-1 ring-line">
         <PatientMap
           here={here}
           pins={pins}
@@ -288,7 +288,7 @@ export function NearbyView({
             <div key={patient.id}>
               {index > 0 ? <div className="border-t border-line/70" /> : null}
               <a href={wazeHref(patient, here)} rel="noreferrer" className="flex min-h-[4.5rem] items-center gap-3 px-4 py-3 active:bg-surface/70">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-terra">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent-strong">
                   {located ? index + 1 : "–"}
                 </span>
                 <span className="min-w-0 flex-1">

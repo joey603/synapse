@@ -59,7 +59,7 @@ export function PatientCockpit({
         <div className="flex flex-col gap-2">
           <Link
             href={visitHrefForStatus(patientId, openVisit.id, openVisit.workflow)}
-            className="flex min-h-12 flex-col items-center justify-center rounded-2xl bg-accent px-4 py-2 text-center text-white"
+            className="flex min-h-12 flex-col items-center justify-center rounded-synapse-md bg-accent px-4 py-2.5 text-center text-white synapse-transition"
           >
             <span className="text-base font-semibold leading-6">{t(locale, actionKey(resumeCode(openVisit.workflow)))}</span>
             <span className="text-xs font-medium text-white/75">
@@ -76,15 +76,15 @@ export function PatientCockpit({
       ) : (
         <Link
           href={`/patients/${patientId}/visits/new`}
-          className="flex min-h-12 items-center justify-center rounded-2xl bg-accent px-4 text-base font-semibold text-white"
+          className="flex min-h-12 items-center justify-center rounded-synapse-md bg-accent px-4 text-base font-semibold text-white synapse-transition"
         >
           {t(locale, "newVisit")}
         </Link>
       )}
       <WeeklyHadCard locale={locale} progress={weekProgress} />
-      <div className="rounded-2xl bg-card px-4 py-4 ring-1 ring-line">
-        <p className="text-sm font-semibold text-muted">{t(locale, "profileSummary")}</p>
-        <p className="mt-3 whitespace-pre-wrap text-[15px] leading-7 text-ink">
+      <div className="rounded-synapse-md bg-card px-4 py-4 ring-1 ring-line/70">
+        <p className="text-[13px] font-semibold text-muted">{t(locale, "profileSummary")}</p>
+        <p className="mt-2.5 whitespace-pre-wrap synapse-clinical-text text-ink">
           {summary?.trim() || t(locale, "profileEmpty")}
         </p>
         {diagnosis?.trim() ? <p className="mt-3 text-sm text-muted">{diagnosis}</p> : null}
@@ -92,9 +92,9 @@ export function PatientCockpit({
       {action.kind === "new" || sameVisit ? null : (
         <Link
           href={action.href}
-          className="flex min-h-12 flex-col items-center justify-center rounded-2xl bg-accent px-4 py-2 text-center text-white"
+          className="flex min-h-12 flex-col items-center justify-center rounded-synapse-md border border-accent/25 bg-accent-soft px-4 py-2 text-center text-accent synapse-transition"
         >
-          <span className="text-xs font-medium text-white/75">{t(locale, "cockpitAction")}</span>
+          <span className="text-xs font-medium text-accent/75">{t(locale, "cockpitAction")}</span>
           <span className="text-base font-semibold leading-6">{actionLabel}</span>
         </Link>
       )}
@@ -115,7 +115,7 @@ function FollowUpForms({ locale, patientId }: { locale: Locale; patientId: strin
 
   return (
     <>
-      <details className="rounded-2xl bg-accent-soft">
+      <details className="rounded-synapse-md bg-accent-soft">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-center px-3 text-sm font-semibold text-accent [&::-webkit-details-marker]:hidden">
           {t(locale, "addEvent")}
         </summary>

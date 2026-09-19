@@ -19,7 +19,7 @@ export function ActionRow({
       href={href}
       className="flex min-h-[4.5rem] items-center gap-3 px-4 py-3 transition-colors active:bg-surface/70"
     >
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-terra">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-strong">
         {icon}
       </div>
       <div className="min-w-0 flex-1">

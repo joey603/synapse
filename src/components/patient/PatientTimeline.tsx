@@ -3,6 +3,7 @@ import type { ClinicalEventKind, VisitType } from "@prisma/client";
 
 import { visitHrefForStatus, type WorkflowLabel } from "@/lib/visits/workflow-status";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge, toneForWorkflow } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import type { Locale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
@@ -69,9 +70,9 @@ export function PatientTimeline({
                   <span className="block text-[15px] font-semibold text-ink">{formatWhen(item.at, locale)}</span>
                   <span className="block text-sm text-muted">{t(locale, visitKey(item.type))}</span>
                 </span>
-                <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
+                <StatusBadge tone={toneForWorkflow(item.workflow)}>
                   {t(locale, workflowKey(item.workflow))}
-                </span>
+                </StatusBadge>
               </Link>
             </SurfaceCard>
           ) : item.kind === "event" && (item.eventKind === "TREATMENT" || item.eventKind === "HOSPITALIZATION") ? (

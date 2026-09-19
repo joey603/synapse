@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { DrivingRiskStatus } from "@prisma/client";
 
 import { BidiRichText } from "@/components/ui/BidiRichText";
+import { Button } from "@/components/ui/Button";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { BIDI_TEXT_CLASS, stripBidiMarks, textDirection, wrapRtlIsolates } from "@/lib/i18n/text-direction";
 
@@ -95,8 +97,8 @@ export function StructuredTransmission({
     initialStructured.interventionsProvided,
     initialStructured.carePlan,
   ].join("\u0001");
-  const fieldClass = `min-h-40 w-full rounded-2xl bg-field px-3 py-3 text-base leading-7 text-ink outline-none ${BIDI_TEXT_CLASS}`;
-  const fullClass = `min-h-56 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)] outline-none ${BIDI_TEXT_CLASS}`;
+  const fieldClass = `min-h-36 w-full synapse-field synapse-clinical-text px-3 py-3 ${BIDI_TEXT_CLASS}`;
+  const fullClass = `min-h-64 w-full rounded-synapse-lg border border-line/60 bg-card px-4 py-4 synapse-document-text text-ink shadow-none outline-none focus:border-accent/40 focus:ring-2 focus:ring-accent/15 ${BIDI_TEXT_CLASS}`;
 
   const incomingKey = `${structuredKey}\u0000${initialText}\u0000${String(initialDurationMinutes)}`;
   const [propsKey, setPropsKey] = useState(incomingKey);
@@ -190,26 +192,24 @@ export function StructuredTransmission({
   // un champ vide → « Non renseigné », pas masquer tout le bloc.
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3.5">
       {validated ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
-            {labels.validatedBadge}
-          </span>
-          {validatedAtLabel ? <span className="text-sm text-muted">{validatedAtLabel}</span> : null}
+          <StatusBadge tone="success">{labels.validatedBadge}</StatusBadge>
+          {validatedAtLabel ? <span className="text-[13px] text-muted">{validatedAtLabel}</span> : null}
         </div>
       ) : (
         <p className="text-sm leading-6 text-muted">{labels.help}</p>
       )}
 
-      <SurfaceCard className="flex flex-col gap-2.5 p-4">
-        <h2 className="text-sm font-semibold text-ink">{labels.visitInfo}</h2>
+      <SurfaceCard variant="secondary" className="flex flex-col gap-2.5 p-4">
+        <h2 className="text-[15px] font-semibold text-ink">{labels.visitInfo}</h2>
         <MetaRow label={labels.visitType} value={visitMeta.typeLabel} />
         <MetaRow label={labels.author} value={visitMeta.authorName} />
         <MetaRow label={labels.date} value={visitMeta.dateLabel} />
         <MetaRow label={labels.time} value={visitMeta.timeLabel} />
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold text-muted">{labels.duration}</p>
+          <p className="text-[12px] font-semibold text-muted">{labels.duration}</p>
           {validated ? (
             <p className="text-sm text-ink">
               {duration != null ? `${duration} ${labels.durationUnit}` : "—"}
@@ -222,8 +222,8 @@ export function StructuredTransmission({
                     key={preset}
                     type="button"
                     onClick={() => setDuration(preset)}
-                    className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${
-                      duration === preset ? "bg-accent text-white" : "bg-surface text-ink"
+                    className={`min-h-10 rounded-synapse-sm px-3 text-sm font-semibold synapse-transition ${
+                      duration === preset ? "bg-accent text-white" : "bg-surface text-ink ring-1 ring-line/80"
                     }`}
                   >
                     {preset}
@@ -244,7 +244,7 @@ export function StructuredTransmission({
                   const n = Number(raw);
                   if (Number.isInteger(n)) setDuration(n);
                 }}
-                className="min-h-11 w-28 rounded-2xl border border-line/80 bg-field px-3 text-base outline-none"
+                className="min-h-11 w-28 synapse-field px-3 text-base"
               />
             </>
           )}
@@ -265,15 +265,15 @@ export function StructuredTransmission({
             onChange={(value) => updateField("patientStatusNote", value)}
           />
 
-          <SurfaceCard className="flex flex-col gap-2 p-4">
-            <h2 className="text-sm font-semibold text-ink">{labels.drivingRisk}</h2>
+          <SurfaceCard variant="inner" className="flex flex-col gap-2 p-3.5">
+            <h2 className="text-[15px] font-semibold text-ink">{labels.drivingRisk}</h2>
             {validated ? (
-              <p className="text-sm text-ink">{labels.drivingLabels[structured.drivingRisk]}</p>
+              <p className="synapse-clinical-text text-ink">{labels.drivingLabels[structured.drivingRisk]}</p>
             ) : (
               <select
                 value={structured.drivingRisk}
                 onChange={(event) => updateField("drivingRisk", event.target.value as DrivingRiskStatus)}
-                className="min-h-11 rounded-2xl border border-line/80 bg-field px-3 text-sm outline-none"
+                className="min-h-11 synapse-field px-3 text-sm"
               >
                 {DRIVING_OPTIONS.map((option) => (
                   <option key={option} value={option}>
@@ -346,21 +346,23 @@ export function StructuredTransmission({
           />
       </>
 
-      <div className="flex flex-col gap-3">
+      <SurfaceCard variant="primary" className="flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-ink">{labels.fullTransmission}</h2>
+          <h2 className="text-[15px] font-semibold text-ink">{labels.fullTransmission}</h2>
           {text.trim() ? (
             <button
               type="button"
               onClick={() => void copyBlock("full", text)}
-              className="rounded-xl border border-line/70 px-3 py-1.5 text-xs font-medium text-ink"
+              className="rounded-synapse-sm px-2.5 py-1.5 text-xs font-semibold text-accent synapse-transition hover:bg-accent-soft"
             >
               {copiedKey === "full" ? labels.copied : labels.copy}
             </button>
           ) : null}
         </div>
         {validated ? (
-          <BidiRichText text={text} className={fullClass} />
+          <div className="rounded-synapse-md bg-surface/70 px-1 py-1">
+            <BidiRichText text={text} className={`px-3 py-3 synapse-document-text text-ink ${BIDI_TEXT_CLASS}`} />
+          </div>
         ) : (
           <textarea
             dir={direction}
@@ -370,16 +372,14 @@ export function StructuredTransmission({
             className={fullClass}
           />
         )}
-      </div>
+      </SurfaceCard>
 
-      {note ? <p className="text-sm text-muted">{note}</p> : null}
+      {note ? <p className="text-[13px] text-muted">{note}</p> : null}
 
       {validated ? null : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 pt-1">
           <form action={`/api/visits/${visitId}/report/validate`} method="post">
-            <button type="submit" className="min-h-12 w-full rounded-2xl bg-card text-sm font-semibold text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
-              {labels.validate}
-            </button>
+            <Button type="submit">{labels.validate}</Button>
           </form>
         </div>
       )}
@@ -422,11 +422,15 @@ function Section({
 }) {
   const showEmpty = locked && !value.trim();
   return (
-    <SurfaceCard className="flex flex-col gap-2 p-4">
+    <SurfaceCard variant="inner" className="flex flex-col gap-2 p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-ink">{title}</h2>
+        <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
         {onCopy && value.trim() ? (
-          <button type="button" onClick={onCopy} className="text-xs font-semibold text-accent">
+          <button
+            type="button"
+            onClick={onCopy}
+            className="text-xs font-semibold text-accent synapse-transition"
+          >
             {copied ? copiedLabel : copyLabel}
           </button>
         ) : null}
@@ -434,7 +438,7 @@ function Section({
       {showEmpty ? (
         <p className="text-sm text-muted">{empty}</p>
       ) : locked ? (
-        <BidiRichText text={value} className={`text-sm leading-6 text-ink ${BIDI_TEXT_CLASS}`} />
+        <BidiRichText text={value} className={`synapse-clinical-text text-ink ${BIDI_TEXT_CLASS}`} />
       ) : (
         <textarea
           dir={textDirection(value)}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
@@ -55,9 +56,7 @@ export default async function TransmissionsPage() {
                         {t(locale, visitTypeLabel(report.visit.type))} · {date}
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-full bg-danger-soft px-2.5 py-1 text-xs font-medium text-danger">
-                      {t(locale, "reportPending")}
-                    </span>
+                    <StatusBadge tone="warning">{t(locale, "reportPending")}</StatusBadge>
                   </span>
                   {preview ? (
                     <span

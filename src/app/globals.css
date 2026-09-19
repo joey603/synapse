@@ -2,22 +2,38 @@
 
 @theme {
   --font-sans: var(--font-heebo), "Arial Hebrew", "Noto Sans Hebrew", Arial, sans-serif;
+
+  /* Palette clinique Synapse V1 */
   --color-ink: #1c2833;
   --color-muted: #6b6258;
   --color-faint: #a3988c;
-  --color-surface: #f7f4ef;
+  --color-surface: #f5f3f0;
   --color-card: #ffffff;
   --color-line: #e6dfd4;
   --color-accent: #1e4d6b;
   --color-accent-strong: #163a52;
-  --color-accent-soft: #e7eef3;
+  --color-accent-soft: #d8e6ef;
   --color-field: #f8f7f5;
   --color-danger: #8d3b3b;
   --color-danger-soft: #f8eeee;
   --color-success: #1f7a46;
   --color-success-soft: #e6f4ec;
+  --color-warning: #9a6b2f;
+  --color-warning-soft: #f3e6d0;
   --color-terra: #9a4f3c;
-  --color-terra-soft: #f6ebe6;
+  --color-terra-soft: #eedfd6;
+
+  /* Radius tokens */
+  --radius-sm: 0.75rem; /* 12px — inputs, chips internes */
+  --radius-md: 1rem; /* 16px — blocs secondaires */
+  --radius-lg: 1.25rem; /* 20px — cards principales */
+  --radius-xl: 1.5rem; /* 24px — grandes surfaces rares */
+  --radius-chrome: 1.125rem; /* 18px — header / bottom nav (pas capsule) */
+  --radius-pill: 999px;
+
+  /* Shadows — sobres */
+  --shadow-card: 0 4px 16px rgba(28, 40, 51, 0.06);
+  --shadow-nav: 0 6px 20px rgba(28, 40, 51, 0.08);
 }
 
 html {
@@ -37,8 +53,75 @@ body {
 
 button,
 a,
-input {
+input,
+textarea,
+select {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Primitives UI partagées */
+@layer utilities {
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-nav {
+    box-shadow: var(--shadow-nav);
+  }
+
+  .rounded-synapse-sm {
+    border-radius: var(--radius-sm);
+  }
+
+  .rounded-synapse-md {
+    border-radius: var(--radius-md);
+  }
+
+  .rounded-synapse-lg {
+    border-radius: var(--radius-lg);
+  }
+
+  .rounded-synapse-xl {
+    border-radius: var(--radius-xl);
+  }
+
+  .rounded-synapse-chrome {
+    border-radius: var(--radius-chrome);
+  }
+
+  .synapse-field {
+    border-radius: var(--radius-sm);
+    border: 1px solid color-mix(in srgb, var(--color-line) 80%, transparent);
+    background: var(--color-field);
+    color: var(--color-ink);
+    outline: none;
+    transition: box-shadow 160ms ease, border-color 160ms ease;
+  }
+
+  .synapse-field:focus,
+  .synapse-field:focus-visible {
+    border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+
+  .synapse-clinical-text {
+    font-size: 0.9375rem; /* 15px */
+    line-height: 1.65;
+  }
+
+  .synapse-document-text {
+    font-size: 1rem; /* 16px */
+    line-height: 1.65;
+  }
+
+  .synapse-transition {
+    transition:
+      color 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      opacity 180ms ease;
+  }
 }
 
 .synapse-map .leaflet-pane,

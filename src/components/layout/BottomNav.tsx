@@ -178,7 +178,7 @@ function Shell({ children }: { children: ReactNode }) {
     <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       <div
         dir="ltr"
-        className="mx-auto flex max-w-lg overflow-hidden rounded-3xl border border-line/80 bg-card shadow-[0_8px_24px_rgba(27,36,48,0.08)]"
+        className="mx-auto flex max-w-lg overflow-hidden rounded-synapse-chrome border border-line/80 bg-card shadow-nav"
       >
         {children}
       </div>
@@ -187,7 +187,7 @@ function Shell({ children }: { children: ReactNode }) {
 }
 
 const NAV_ITEM =
-  "flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium";
+  "flex min-h-[3.75rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium synapse-transition";
 
 function BackButton({ label, fallback }: { label: string; fallback: string }) {
   const router = useRouter();
@@ -222,7 +222,17 @@ function NavLink({
   accent?: boolean;
   active?: boolean;
 }) {
-  const tone = accent || active ? "text-accent" : "text-faint";
+  if (accent) {
+    return (
+      <Link href={href} className={`${NAV_ITEM} text-accent`}>
+        <span className="flex h-9 w-9 items-center justify-center rounded-synapse-sm bg-accent text-white">
+          <Icon />
+        </span>
+        <span className="w-full truncate text-center text-[10px] font-semibold leading-3">{label}</span>
+      </Link>
+    );
+  }
+  const tone = active ? "text-accent" : "text-faint";
   return (
     <Link href={href} className={`${NAV_ITEM} ${tone}`}>
       <Icon />

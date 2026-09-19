@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { TaskInbox } from "@/components/tasks/TaskInbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
 import { db, join } from "@/lib/db";
@@ -75,17 +76,11 @@ export default async function RecentVisitsPage({ searchParams }: { searchParams:
                     </p>
                   </div>
                   {visit.report?.status === "AI_GENERATED" || visit.report?.status === "REVIEWED" ? (
-                    <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
-                      {t(locale, "reportPending")}
-                    </span>
+                    <StatusBadge tone="warning">{t(locale, "reportPending")}</StatusBadge>
                   ) : visit.report?.status === "DRAFT" ? (
-                    <span className="shrink-0 rounded-full bg-surface px-2.5 py-1 text-xs font-medium text-muted">
-                      {t(locale, "visitDraft")}
-                    </span>
+                    <StatusBadge tone="muted">{t(locale, "visitDraft")}</StatusBadge>
                   ) : visit.report?.status === "VALIDATED" ? (
-                    <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
-                      {t(locale, "reportValidated")}
-                    </span>
+                    <StatusBadge tone="success">{t(locale, "reportValidated")}</StatusBadge>
                   ) : null}
                 </Link>
               </div>

@@ -108,7 +108,7 @@ export function PatientForm({
         <div className="mx-auto flex max-w-lg gap-3 border-t border-line/70 px-5 pt-2 pb-[calc(4.65rem+env(safe-area-inset-bottom))]">
           <Link
             href={cancelHref}
-            className="flex min-h-12 flex-1 items-center justify-center rounded-2xl bg-card text-sm font-semibold text-muted shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
+            className="flex min-h-12 flex-1 items-center justify-center rounded-2xl bg-card text-sm font-semibold text-muted ring-1 ring-line/70"
           >
             {t(locale, "cancel")}
           </Link>
@@ -207,4 +207,4 @@ function Select({
 }
 
 const controlClass =
-  "min-h-12 w-full rounded-2xl border border-line/80 bg-field px-4 text-base font-normal text-ink outline-none focus:ring-2 focus:ring-accent/30";
+  "min-h-12 w-full synapse-field px-4 text-base font-normal";

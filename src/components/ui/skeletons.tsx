@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 
-const card = "overflow-hidden rounded-3xl bg-card shadow-[0_8px_24px_rgba(27,36,48,0.06)]";
+const card = "overflow-hidden rounded-synapse-md bg-card ring-1 ring-line/70";
 
 function Shell({ label, children, className = "gap-5" }: { label: string; children: ReactNode; className?: string }) {
   return (

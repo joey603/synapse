@@ -68,7 +68,7 @@ export function AnalysisView({
       ) : null}
 
       {sections.map((section) => (
-        <details key={section.id} open={section.open} className="rounded-3xl bg-card shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+        <details key={section.id} open={section.open} className="rounded-synapse-md bg-card ring-1 ring-line/70">
           <summary className="cursor-pointer list-none px-4 py-4 text-[15px] font-semibold text-ink">
             {section.title}
           </summary>
@@ -92,7 +92,7 @@ export function AnalysisView({
       ))}
 
       {meds ? (
-        <details open className="rounded-3xl bg-card shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+        <details open className="rounded-synapse-md bg-card ring-1 ring-line/70">
           <summary className="cursor-pointer list-none px-4 py-4 text-[15px] font-semibold text-ink">{meds.title}</summary>
           <div className="flex flex-col gap-4 border-t border-line/70 px-4 py-4">
             <div>
@@ -128,7 +128,7 @@ export function AnalysisView({
       ) : null}
 
       {changes ? (
-        <details open className="rounded-3xl bg-card shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+        <details open className="rounded-synapse-md bg-card ring-1 ring-line/70">
           <summary className="cursor-pointer list-none px-4 py-4 text-[15px] font-semibold text-ink">{changes.title}</summary>
           <div className="flex flex-col border-t border-line/70">
             {changes.rows.length === 0 ? <p className="px-4 py-3 text-sm text-muted">{changes.empty}</p> : null}

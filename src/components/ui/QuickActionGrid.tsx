@@ -6,12 +6,13 @@ export type QuickAction = {
   title: string;
   subtitle: string;
   icon: ReactNode;
-  tone?: "default" | "accent" | "danger";
+  tone?: "default" | "accent" | "danger" | "warning";
 };
 
 const toneClasses = {
-  default: "bg-accent-soft text-terra",
-  accent: "bg-accent-soft text-terra",
+  default: "bg-accent-soft text-accent-strong",
+  accent: "bg-accent-soft text-accent-strong",
+  warning: "bg-warning-soft text-warning",
   danger: "bg-danger-soft text-danger",
 };
 
@@ -22,10 +23,10 @@ export function QuickActionGrid({ items }: { items: QuickAction[] }) {
         <Link
           key={item.href + item.title}
           href={item.href}
-          className="flex min-h-[7.5rem] flex-col gap-3 rounded-3xl bg-card p-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)] transition-transform active:scale-[0.98]"
+          className="flex min-h-[7.25rem] flex-col gap-3 rounded-synapse-md bg-card p-4 ring-1 ring-line/70 synapse-transition active:scale-[0.99]"
         >
           <div
-            className={`flex h-11 w-11 items-center justify-center rounded-2xl ${toneClasses[item.tone ?? "default"]}`}
+            className={`flex h-10 w-10 items-center justify-center rounded-synapse-sm ${toneClasses[item.tone ?? "default"]}`}
           >
             {item.icon}
           </div>

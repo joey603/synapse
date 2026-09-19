@@ -11,6 +11,8 @@ import { TaskPanel } from "@/components/tasks/TaskPanel";
 import { StructuredTransmission } from "@/components/visits/StructuredTransmission";
 import { TranscriptEditor } from "@/components/visits/TranscriptEditor";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
+import { StatusBadge, toneForWorkflow } from "@/components/ui/StatusBadge";
+import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { hebrewClinicalText } from "@/lib/clinical/hebrew-text";
 import { compareMedications } from "@/lib/clinical/medication-compare";
@@ -154,15 +156,7 @@ export default async function VisitPage({
             <p className="mt-1 text-sm text-muted">{t(locale, "visitNext")}</p>
           ) : null}
         </div>
-        <span
-          className={
-            validated
-              ? "shrink-0 rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent"
-              : "shrink-0 rounded-full bg-surface px-3 py-1 text-xs font-semibold text-muted"
-          }
-        >
-          {statusLabel}
-        </span>
+        <StatusBadge tone={validated ? "success" : toneForWorkflow(flow)}>{statusLabel}</StatusBadge>
       </header>
       {showAudioControls ? (
         <AudioPanel locale={locale} visitId={visit.id} recording={visit.recording} audio={audio} />
@@ -190,17 +184,15 @@ export default async function VisitPage({
           {!busy && !validated && !visit.transcript && visit.recording?.status === "STORED" ? (
             <form action={`/api/visits/${visit.id}/pipeline`} method="post">
               <input type="hidden" name="mode" value="transcribe" />
-              <button type="submit" className="min-h-12 w-full rounded-2xl bg-accent text-sm font-semibold text-white">
+              <Button type="submit">
                 {visit.pipelineStatus === "FAILED" ? t(locale, "retryPipeline") : t(locale, "startPipeline")}
-              </button>
+              </Button>
             </form>
           ) : null}
           {!busy && !validated && visit.transcript ? (
             <form action={`/api/visits/${visit.id}/pipeline`} method="post" className="flex flex-col gap-3">
               <input type="hidden" name="mode" value="analyze" />
-              <button type="submit" className="min-h-12 w-full rounded-2xl bg-accent text-sm font-semibold text-white">
-                {t(locale, "analyzeVisit")}
-              </button>
+              <Button type="submit">{t(locale, "analyzeVisit")}</Button>
             </form>
           ) : null}
         </SurfaceCard>
@@ -680,7 +672,7 @@ function AnalysisExtras({
   return (
     <div className="flex flex-col gap-3">
       {cards.map((card) => (
-        <section key={card.id} className="rounded-3xl bg-card px-4 py-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+        <section key={card.id} className="rounded-synapse-md bg-card px-4 py-4 ring-1 ring-line/70">
           <h2 className="text-[15px] font-semibold text-ink">{card.title}</h2>
           <ul className="mt-2 flex flex-col gap-2">
             {card.rows.map((row) => (
@@ -692,7 +684,7 @@ function AnalysisExtras({
         </section>
       ))}
       {suggestedHebrew.length > 0 ? (
-        <section className="rounded-3xl bg-card px-4 py-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+        <section className="rounded-synapse-md bg-card px-4 py-4 ring-1 ring-line/70">
           <h2 className="text-[15px] font-semibold text-ink">{t(locale, "sectionSuggestedTasks")}</h2>
           <ul className="mt-2 flex flex-col gap-3">
             {suggestedHebrew.map((task) => (

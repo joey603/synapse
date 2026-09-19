@@ -85,7 +85,7 @@ export function SearchField({
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder={t(locale, "searchPlaceholder")}
-        className="min-h-12 w-full rounded-2xl border-0 bg-field py-3 ps-11 pe-4 text-base text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)] outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/25"
+        className="min-h-12 w-full rounded-synapse-md border-0 bg-field py-3 ps-11 pe-4 text-base text-ink outline-none placeholder:text-muted/80 focus:ring-2 focus:ring-accent/25"
       />
     </form>
   );

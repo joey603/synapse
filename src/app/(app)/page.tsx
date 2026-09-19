@@ -52,11 +52,11 @@ export default async function HomePage() {
   ];
 
   return (
-    <div className="-mx-1 flex flex-1 flex-col justify-between gap-6">
+    <div className="flex flex-1 flex-col gap-5">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-muted">{capitalize(dateLabel)}</p>
-          <h1 className="mt-1 text-[1.75rem] font-semibold leading-tight">
+          <p className="text-[13px] text-muted">{capitalize(dateLabel)}</p>
+          <h1 className="mt-1 text-[1.7rem] font-semibold leading-tight tracking-tight">
             {name ? `${t(locale, "greeting")}, ${firstName(name)}` : t(locale, "greeting")}
           </h1>
         </div>
@@ -68,9 +68,9 @@ export default async function HomePage() {
             ? `/agenda?day=${jerusalemDateKey(nextVisit.occurredAt)}`
             : "/agenda"
         }
-        className="flex items-center gap-4 rounded-3xl bg-card p-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
+        className="flex items-center gap-4 rounded-synapse-lg bg-card p-4 ring-1 ring-line/60 synapse-transition active:scale-[0.995]"
       >
-        <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-accent-soft text-terra">
+        <span className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-synapse-md bg-accent-soft text-accent-strong">
           <span className="text-sm font-semibold tabular-nums leading-none">
             {nextVisit
               ? new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "fr-FR", {
@@ -82,7 +82,9 @@ export default async function HomePage() {
           </span>
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-xs font-semibold text-muted">{t(locale, "nextVisit")}</span>
+          <span className="block text-[12px] font-semibold uppercase tracking-wide text-muted">
+            {t(locale, "nextVisit")}
+          </span>
           <span className="mt-0.5 block truncate text-[15px] font-semibold text-ink">
             {nextVisit
               ? `${nextVisit.patient.firstName} ${nextVisit.patient.lastName}`
@@ -99,9 +101,9 @@ export default async function HomePage() {
 
       <Link
         href="/nearby"
-        className="flex items-center gap-4 rounded-3xl bg-card p-4 shadow-[0_8px_24px_rgba(27,36,48,0.06)]"
+        className="flex items-center gap-4 rounded-synapse-md bg-card p-4 ring-1 ring-line/70 synapse-transition active:bg-surface/40"
       >
-        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-terra">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-synapse-sm bg-terra-soft text-terra">
           <PinIcon />
         </span>
         <span className="min-w-0 flex-1">
@@ -111,11 +113,15 @@ export default async function HomePage() {
         <ChevronIcon />
       </Link>
 
-      <QuickActionGrid items={quickActions} />
+      <QuickActionGrid
+        items={quickActions.map((item) =>
+          item.tone === "danger" ? { ...item, tone: "warning" as const } : item,
+        )}
+      />
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-muted">{t(locale, "homeNeedTitle")}</h2>
-        <SurfaceCard>
+      <section className="flex flex-col gap-2.5">
+        <h2 className="text-[13px] font-semibold text-muted">{t(locale, "homeNeedTitle")}</h2>
+        <SurfaceCard variant="secondary">
           <ActionRow
             href="/tasks"
             title={t(locale, "tasksTitle")}
@@ -131,7 +137,6 @@ export default async function HomePage() {
           />
         </SurfaceCard>
       </section>
-
     </div>
   );
 }

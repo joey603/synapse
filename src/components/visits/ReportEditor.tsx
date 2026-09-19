@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { BidiRichText } from "@/components/ui/BidiRichText";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { BIDI_TEXT_CLASS, stripBidiMarks, textDirection, wrapRtlIsolates } from "@/lib/i18n/text-direction";
 
 export function ReportEditor({
@@ -35,7 +36,7 @@ export function ReportEditor({
   const [text, setText] = useState(initialText);
   const [note, setNote] = useState("");
   const direction = textDirection(text);
-  const fieldClass = `min-h-72 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)] outline-none ${BIDI_TEXT_CLASS}`;
+  const fieldClass = `min-h-72 w-full synapse-field synapse-document-text px-4 py-4 ${BIDI_TEXT_CLASS}`;
   const [seenInitialText, setSeenInitialText] = useState(initialText);
 
   if (seenInitialText !== initialText) {
@@ -79,9 +80,7 @@ export function ReportEditor({
     <div className="flex flex-col gap-3">
       {validated ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
-            {labels.validatedBadge}
-          </span>
+          <StatusBadge tone="success">{labels.validatedBadge}</StatusBadge>
           {validatedAtLabel ? <span className="text-sm text-muted">{validatedAtLabel}</span> : null}
         </div>
       ) : (
@@ -108,7 +107,7 @@ export function ReportEditor({
         </button>
         {validated ? null : (
           <form action={`/api/visits/${visitId}/report/validate`} method="post">
-            <button type="submit" className="min-h-12 w-full rounded-2xl bg-card text-sm font-semibold text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
+            <button type="submit" className="min-h-12 w-full rounded-2xl bg-card text-sm font-semibold text-ink ring-1 ring-line/70">
               {labels.validate}
             </button>
           </form>

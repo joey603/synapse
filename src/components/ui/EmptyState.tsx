@@ -1,8 +1,19 @@
-export function EmptyState({ title, body }: { title: string; body: string }) {
+import type { ReactNode } from "react";
+
+export function EmptyState({
+  title,
+  body,
+  action,
+}: {
+  title: string;
+  body: string;
+  action?: ReactNode;
+}) {
   return (
-    <div className="rounded-3xl bg-card px-5 py-8 text-center shadow-[0_8px_24px_rgba(27,36,48,0.06)]">
-      <p className="text-base font-semibold text-ink">{title}</p>
+    <div className="rounded-synapse-md bg-card px-5 py-7 text-center ring-1 ring-line/70">
+      <p className="text-[15px] font-semibold text-ink">{title}</p>
       <p className="mx-auto mt-1.5 max-w-xs text-sm leading-6 text-muted">{body}</p>
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   );
 }

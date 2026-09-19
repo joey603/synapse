@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { StatusBadge, type StatusBadgeTone } from "@/components/ui/StatusBadge";
 
 export function PatientListRow({
   href,
@@ -14,30 +15,31 @@ export function PatientListRow({
   name: string;
   meta: string;
   badge?: string;
-  badgeTone?: "success" | "danger" | "muted";
+  badgeTone?: StatusBadgeTone | "success" | "danger" | "muted";
   photoUrl?: string | null;
 }) {
+  const tone: StatusBadgeTone =
+    badgeTone === "success"
+      ? "success"
+      : badgeTone === "danger"
+        ? "danger"
+        : badgeTone === "muted"
+          ? "muted"
+          : badgeTone;
+
   return (
     <Link
       href={href}
-      className="flex min-h-[5rem] items-center gap-3 px-4 py-3 transition-colors active:bg-surface/70"
+      className="flex min-h-[5rem] items-center gap-3 px-4 py-3 synapse-transition active:bg-surface/70"
     >
       <Avatar name={name} photoUrl={photoUrl} />
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-4">
+        <div className="flex min-w-0 items-center gap-3">
           <p className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">{name}</p>
           {badge ? (
-            <span
-              className={`w-[5.25rem] shrink-0 truncate text-center text-xs font-medium leading-5 ${
-                badgeTone === "danger"
-                  ? "rounded-full bg-danger-soft px-2 py-0.5 text-danger"
-                  : badgeTone === "muted"
-                    ? "rounded-full bg-surface px-2 py-0.5 text-muted"
-                    : "rounded-full bg-success-soft px-2 py-0.5 text-success"
-              }`}
-            >
+            <StatusBadge tone={tone} className="min-w-0 max-w-[4.75rem] justify-center">
               {badge}
-            </span>
+            </StatusBadge>
           ) : null}
         </div>
         {meta ? <p className="truncate text-sm text-muted">{meta}</p> : null}
