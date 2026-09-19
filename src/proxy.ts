@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { SESSION_COOKIE } from "@/lib/auth/constants";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth/constants";
 
 const PUBLIC_PATHS = new Set(["/login", "/api/auth/login"]);
 
@@ -16,7 +16,8 @@ function isPublicAsset(pathname: string) {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
+  const sessionToken = request.cookies.get(SESSION_COOKIE)?.value;
+  const hasSession = Boolean(sessionToken);
 
   if (!hasSession && !isPublicAsset(pathname)) {
     return NextResponse.redirect(new URL("/login", request.url));
@@ -26,7 +27,22 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+
+  // Prolonge le cookie à chaque visite pour éviter une déconnexion Safari/iOS.
+  if (sessionToken && !pathname.startsWith("/api/auth/logout") && !pathname.startsWith("/api/auth/clear")) {
+    response.cookies.set({
+      name: SESSION_COOKIE,
+      value: sessionToken,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    });
+  }
+
+  return response;
 }
 
 export const config = {

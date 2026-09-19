@@ -74,12 +74,65 @@ async function loadSession(): Promise<SessionLookup> {
       return { status: "invalid" };
     }
 
-    rememberSession(sessionToken, row.user, row.expires.getTime());
+    const renewed = maybeRenewExpires(row.expires);
+    if (renewed) {
+      after(() => {
+        db.session
+          .update({ where: { id: row.id }, data: { expires: renewed } })
+          .catch(() => undefined);
+      });
+      rememberSession(sessionToken, row.user, renewed.getTime());
+    } else {
+      rememberSession(sessionToken, row.user, row.expires.getTime());
+    }
     return { status: "ok", user: row.user };
   } catch (error) {
     const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : "unknown";
     logger.info("auth.session_lookup_failed", { code });
     return { status: "invalid" };
+  }
+}
+
+function maybeRenewExpires(current: Date) {
+  const remaining = current.getTime() - Date.now();
+  if (remaining > SESSION_MAX_AGE_SECONDS * 500) return null;
+  return new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+}
+
+/** Prolonge cookie + ligne Session (appelée depuis le client à l’ouverture de l’app). */
+export async function touchCurrentSession(): Promise<
+  | { ok: true; token: string; user: SessionUser; expires: Date }
+  | { ok: false }
+> {
+  const token = await readSessionCookie();
+  if (!token) return { ok: false };
+
+  const sessionToken = hashSessionToken(token);
+  const expires = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+
+  try {
+    const updated = await withDbRetry(() =>
+      db.session.updateMany({
+        where: { sessionToken, expires: { gt: new Date() } },
+        data: { expires },
+      }),
+    );
+    if (updated.count === 0) return { ok: false };
+
+    const row = await withDbRetry(() =>
+      db.session.findUnique({
+        where: { sessionToken },
+        select: {
+          user: { select: { id: true, name: true, email: true, role: true } },
+        },
+      }),
+    );
+    if (!row) return { ok: false };
+
+    rememberSession(sessionToken, row.user, expires.getTime());
+    return { ok: true, token, user: row.user, expires };
+  } catch {
+    return { ok: false };
   }
 }
 
