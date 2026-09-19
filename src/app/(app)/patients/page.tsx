@@ -6,7 +6,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PatientListRow } from "@/components/ui/PatientListRow";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { db } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
@@ -44,8 +43,8 @@ export default async function PatientsPage({
   });
 
   return (
-    <div className="flex flex-col gap-3">
-      <header className="flex items-baseline justify-between gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <header className="flex shrink-0 items-baseline justify-between gap-3">
         <h1 className="text-[1.7rem] font-semibold leading-tight">{t(locale, "patientsTitle")}</h1>
         <p className="shrink-0 text-sm font-medium tabular-nums text-muted">
           {patients.length} {t(locale, patients.length === 1 ? "patientCountOne" : "patientCountMany")}
@@ -54,27 +53,31 @@ export default async function PatientsPage({
 
       <Link
         href="/patients/new"
-        className="flex min-h-12 items-center justify-center rounded-2xl bg-accent text-base font-semibold text-white"
+        className="flex min-h-12 shrink-0 items-center justify-center rounded-2xl bg-accent text-base font-semibold text-white"
       >
         {t(locale, "newPatient")}
       </Link>
 
-      <SearchField locale={locale} defaultValue={query} params={tab === "all" ? { tab: "all" } : undefined} />
+      <div className="shrink-0">
+        <SearchField locale={locale} defaultValue={query} params={tab === "all" ? { tab: "all" } : undefined} />
+      </div>
 
-      <Suspense fallback={null}>
-        <SegmentedControl
-          segments={[
-            { id: "active", label: t(locale, "tabActive"), href: "/patients?tab=active" },
-            { id: "all", label: t(locale, "tabAll"), href: "/patients?tab=all" },
-          ]}
-        />
-      </Suspense>
+      <div className="shrink-0">
+        <Suspense fallback={null}>
+          <SegmentedControl
+            segments={[
+              { id: "active", label: t(locale, "tabActive"), href: "/patients?tab=active" },
+              { id: "all", label: t(locale, "tabAll"), href: "/patients?tab=all" },
+            ]}
+          />
+        </Suspense>
+      </div>
 
       {patients.length === 0 ? (
         <EmptyState title={t(locale, "patientsEmpty")} body={t(locale, "patientsHint")} />
       ) : (
-        <div className="patient-scroll overflow-hidden rounded-3xl">
-          <SurfaceCard>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-synapse-md bg-card ring-1 ring-line/70">
+          <div className="patient-scroll min-h-0 flex-1 overflow-y-auto">
             {patients.map((patient, index) => {
               const name = `${patient.firstName} ${patient.lastName}`;
               const meta = [patient.city, patient.primaryDiagnosis].filter(Boolean).join(" • ");
@@ -99,7 +102,7 @@ export default async function PatientsPage({
                 </div>
               );
             })}
-          </SurfaceCard>
+          </div>
         </div>
       )}
     </div>
