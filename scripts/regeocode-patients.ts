@@ -114,7 +114,7 @@ async function main() {
     }
     if (patient.geoKey === key && patient.latitude != null) {
       ok += 1;
-      console.log(`SKIP ${patient.firstName} ${patient.lastName}`.trim());
+      console.log(`SKIP id=${patient.id}`);
       continue;
     }
     if (index > 0) await sleep(1200);
@@ -127,10 +127,10 @@ async function main() {
     });
     if (point) {
       ok += 1;
-      console.log(`OK  ${patient.firstName} ${patient.lastName}`.trim(), point.latitude, point.longitude);
+      console.log(`OK  id=${patient.id}`);
     } else {
       fail += 1;
-      console.log(`FAIL ${patient.firstName} ${patient.lastName}`.trim(), patient.address, patient.city);
+      console.log(`FAIL id=${patient.id}`);
     }
   }
 

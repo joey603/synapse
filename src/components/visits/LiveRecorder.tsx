@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 
@@ -47,15 +47,36 @@ export function LiveRecorder({
   const pausedMs = useRef(0);
   const pauseBegan = useRef<number | null>(null);
 
+  const currentElapsed = useCallback(() => {
+    const extra = pauseBegan.current ? Date.now() - pauseBegan.current : 0;
+    return Math.max(0, Date.now() - startedAt.current - pausedMs.current - extra);
+  }, []);
+
+  const release = useCallback(() => {
+    const media = recorder.current;
+    recorder.current = null;
+    if (media && media.state !== "inactive") {
+      media.ondataavailable = null;
+      media.onstop = null;
+      try {
+        media.stop();
+      } catch {
+        // already stopped
+      }
+    }
+    stream.current?.getTracks().forEach((track) => track.stop());
+    stream.current = null;
+  }, []);
+
   useEffect(() => {
     if (phase !== "recording") return;
     const timer = window.setInterval(() => setElapsed(currentElapsed()), 250);
     return () => window.clearInterval(timer);
-  }, [phase]);
+  }, [currentElapsed, phase]);
 
   useEffect(() => {
     return () => release();
-  }, []);
+  }, [release]);
 
   async function start() {
     setError(null);
@@ -75,7 +96,7 @@ export function LiveRecorder({
       media.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.current.push(event.data);
       };
-      if (useTimeslice()) media.start(1000);
+      if (shouldUseTimeslice()) media.start(1000);
       else media.start();
       recorder.current = media;
       setCanPause(typeof media.pause === "function");
@@ -122,7 +143,7 @@ export function LiveRecorder({
     const blob = await new Promise<Blob>((resolve) => {
       media.onstop = () =>
         resolve(new Blob(chunks.current, { type: media.mimeType || mimeUsed.current }));
-      if (media.state === "recording" && useTimeslice()) {
+      if (media.state === "recording" && shouldUseTimeslice()) {
         try {
           media.requestData();
         } catch {
@@ -160,27 +181,6 @@ export function LiveRecorder({
       setError(saveLabel);
       setPhase("idle");
     }
-  }
-
-  function currentElapsed() {
-    const extra = pauseBegan.current ? Date.now() - pauseBegan.current : 0;
-    return Math.max(0, Date.now() - startedAt.current - pausedMs.current - extra);
-  }
-
-  function release() {
-    const media = recorder.current;
-    recorder.current = null;
-    if (media && media.state !== "inactive") {
-      media.ondataavailable = null;
-      media.onstop = null;
-      try {
-        media.stop();
-      } catch {
-        // already stopped
-      }
-    }
-    stream.current?.getTracks().forEach((track) => track.stop());
-    stream.current = null;
   }
 
   const live = phase === "recording" || phase === "paused";
@@ -246,7 +246,7 @@ function pickMime() {
   return types.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
-function useTimeslice() {
+function shouldUseTimeslice() {
   const ua = navigator.userAgent;
   const ios =
     /iPad|iPhone|iPod/.test(ua) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));

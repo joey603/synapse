@@ -3,7 +3,7 @@ import type { DrivingRiskStatus, VisitType } from "@prisma/client";
 import {
   composeLegacyHebrewReport,
   diagnosisFromPatient,
-} from "./legacy-hebrew-batch1";
+} from "../legacy-hebrew-batch1";
 
 export type LegacyBatch4Visit = {
   importKey: string;

@@ -13,9 +13,6 @@
     "db:seed": "prisma db seed",
     "import:patients": "tsx scripts/import-tsabar.ts",
     "import:legacy-visits": "tsx scripts/import-legacy-visits.ts",
-    "import:legacy-visits-batch2": "tsx scripts/import-legacy-visits-batch2.ts",
-    "import:legacy-visits-batch3": "tsx scripts/import-legacy-visits-batch3.ts",
-    "import:legacy-visits-batch4": "tsx scripts/import-legacy-visits-batch4.ts",
     "update:legacy-hebrew": "tsx scripts/update-legacy-hebrew.ts",
     "check:clinical": "tsx scripts/check-clinical.ts",
     "check:structured-report": "tsx scripts/check-structured-report.ts",
@@ -23,6 +20,7 @@
     "check:patient-isolation": "tsx scripts/check-patient-isolation.ts",
     "check:gold-case-001": "tsx scripts/check-gold-case-001.ts",
     "check:zebra-phase2": "tsx scripts/check-zebra-phase2.ts",
+    "check:v1-freeze": "tsx scripts/check-v1-freeze-guards.ts",
     "gold:001": "tsx scripts/run-gold-case-001.ts"
   },
   "prisma": {

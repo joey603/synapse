@@ -387,7 +387,6 @@ function joinClinical(parts: string[]) {
  */
 export function composePatientStatusProse(extraction: StoredExtraction, sex: Sex): string | null {
   const facts = buildProjectedFacts(extraction);
-  maybeLogZebraDebug(extraction, facts, "status");
   const clauses: string[] = [];
   const noun = patientNoun(sex);
 
@@ -572,7 +571,6 @@ function splitFacets(value: string): string[] {
  */
 export function composeMainProblemsProse(extraction: StoredExtraction, sex: Sex): string | null {
   const facts = buildProjectedFacts(extraction);
-  maybeLogZebraDebug(extraction, facts, "problems");
   const clauses: string[] = [];
 
   const facets = collectProblemFacets(extraction, facts).filter(
@@ -677,34 +675,6 @@ export function countDocumentedCurrentFacts(extraction: StoredExtraction) {
 
 export function countProjectedPresent(facts: ProjectedFact[]) {
   return facts.filter((item) => item.assertion === "present").length;
-}
-
-function maybeLogZebraDebug(
-  extraction: StoredExtraction,
-  projected: ProjectedFact[],
-  stage: "status" | "problems",
-) {
-  if (process.env.SYNAPSE_DEBUG_ZEBRA !== "1") return;
-  const documented = (Object.keys(extraction.facts) as FactDomain[])
-    .map((domain) => {
-      const fact = extraction.facts[domain];
-      if (fact.assertion !== "present" && fact.assertion !== "explicitly_denied") return null;
-      return {
-        domain,
-        assertion: fact.assertion,
-        temporality: fact.temporality,
-        value: fact.value,
-        quote: primaryQuote(fact),
-      };
-    })
-    .filter(Boolean);
-  console.info(`[Synapse Zebra debug:${stage}] documentedCurrent=${countDocumentedCurrentFacts(extraction)}`);
-  console.info(`[Synapse Zebra debug:${stage}] documented=`, documented);
-  console.info(`[Synapse Zebra debug:${stage}] longitudinal=`, extraction.longitudinal);
-  console.info(`[Synapse Zebra debug:${stage}] projected=`, projected);
-  console.info(
-    `[Synapse Zebra debug:${stage}] projectedPresent=${countProjectedPresent(projected)} total=${projected.length}`,
-  );
 }
 
 export { STATUS_BUCKETS };

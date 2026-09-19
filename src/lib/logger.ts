@@ -3,7 +3,7 @@ import "server-only";
 const REDACTED = "[redacted]";
 
 const SENSITIVE_KEY =
-  /transcript|rawtext|aidraft|editeddraft|finaltext|password|secret|token|authorization|apikey|api_key|openai|audio|dosage|dose|summary|phone|address/i;
+  /transcript|rawtext|aidraft|editeddraft|finaltext|finalreport|patientstatus|mainproblem|currentmedication|intervention|careplan|diagnosis|nursenote|suicid|symptom|password|secret|token|authorization|apikey|api_key|openai|audio|dosage|dose|summary|phone|address|firstname|lastname|context|prompt|payload/i;
 
 const SECRET_VALUE = /\bsk-[A-Za-z0-9_-]{8,}\b|\bBearer\s+\S+/i;
 

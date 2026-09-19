@@ -225,7 +225,7 @@ async function extract(
       schemaVersion: "2",
       promptVersion: EXTRACTION_PROMPT,
       provider: providerName(),
-      model: providerName() === "openai" ? process.env.AI_CLINICAL_MODEL || "openai" : "fake-extract",
+      model: providerName() === "openai" ? "openai-clinical" : "fake-extract",
       payload: validated,
     },
   });

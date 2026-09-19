@@ -1,10 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { getClinicalModel } from "../src/lib/ai/models";
 import { openaiClinical } from "../src/lib/ai/openai";
 import { coerceExtraction } from "../src/lib/clinical/schema";
 import { validateExtraction } from "../src/lib/clinical/validators";
-import { JACKY_SUICIDE_DENIAL_QUOTE } from "../fixtures/transcripts/jacky-had";
 import {
   GOLD_CASE_001,
   evaluateGoldTransmission,
@@ -22,13 +22,8 @@ async function main() {
     throw new Error("OPENAI_API_KEY missing — cannot run live Gold Case 001");
   }
 
-  const model = process.env.AI_CLINICAL_MODEL || "gpt-4.1-mini";
+  const model = getClinicalModel();
   console.info(`Gold Case 001 · prompt=${CLINICAL_REPORT_PROMPT_VERSION} · model=${model}`);
-
-  // --- Diagnostic suicidalité A→G ---
-  console.info("\n===== DIAGNOSTIC SUICIDALITÉ A→G =====\n");
-  console.info("A. Quote in transcript:", JACKY_SUICIDE_DENIAL_QUOTE);
-  console.info("   present?", GOLD_CASE_001.transcript.includes(JACKY_SUICIDE_DENIAL_QUOTE));
 
   const raw = await openaiClinical.extract({
     transcript: GOLD_CASE_001.transcript,
@@ -38,43 +33,11 @@ async function main() {
   if (!coerced) throw new Error("Gold Case 001: coerceExtraction failed");
 
   const before = coerced.facts.suicidality;
-  console.info(
-    "E. clinical fact AVANT validation:",
-    JSON.stringify(
-      {
-        assertion: before.assertion,
-        evidences: before.evidences,
-        evidence: before.evidence,
-        temporality: before.temporality,
-        source: before.source,
-      },
-      null,
-      2,
-    ),
-  );
-
   const validated = validateExtraction(raw, GOLD_CASE_001.transcript, "");
   if (!validated) throw new Error("Gold Case 001: validation failed");
   const after = validated.facts.suicidality;
   const primary = after.evidences.find(
     (item) => item.speaker === "PATIENT" && item.temporality === "CURRENT" && item.source === "TRANSCRIPT",
-  );
-  console.info("B. speaker:", primary?.speaker ?? after.evidences[0]?.speaker ?? null);
-  console.info("C. source:", primary?.source ?? after.evidences[0]?.source ?? null);
-  console.info("D. temporality:", primary?.temporality ?? after.evidences[0]?.temporality ?? null);
-  console.info(
-    "F. clinical fact APRÈS validation:",
-    JSON.stringify(
-      {
-        assertion: after.assertion,
-        evidences: after.evidences,
-        evidence: after.evidence,
-        temporality: after.temporality,
-        source: after.source,
-      },
-      null,
-      2,
-    ),
   );
 
   if (after.assertion !== "explicitly_denied") {
@@ -96,22 +59,6 @@ async function main() {
   const text = written.text.trim();
   if (!text) throw new Error("Gold Case 001: empty transmission");
 
-  console.info(
-    "G. valeur utilisée pour finalReportHe (suicidality JSON + citation attendue):",
-    JSON.stringify(
-      {
-        assertion: after.assertion,
-        quote: after.evidence?.quote ?? primary.quote,
-        speaker: primary.speaker,
-        source: primary.source,
-        temporality: primary.temporality,
-        reportSuicideSnippet: text.match(/.{0,40}אובדנ.{0,80}/)?.[0] ?? null,
-      },
-      null,
-      2,
-    ),
-  );
-
   const evaluation = evaluateGoldTransmission(text);
   const meta = {
     id: GOLD_CASE_001.id,
@@ -128,7 +75,8 @@ async function main() {
       speaker: primary.speaker,
       source: primary.source,
       temporality: primary.temporality,
-      quote: primary.quote,
+      // quote écrit uniquement dans le fichier de trace — pas en console
+      quotePresent: Boolean(primary.quote),
       lossStage:
         before.assertion === "not_assessed" || before.assertion === "not_reported"
           ? "OpenAI extraction (salvaged by deterministic validator)"
@@ -143,18 +91,38 @@ async function main() {
   writeFileSync(join(outDir, "last-meta.json"), `${JSON.stringify(meta, null, 2)}\n`, "utf8");
   writeFileSync(
     join(outDir, "last-suicidality-trace.json"),
-    `${JSON.stringify(meta.suicidalityTrace, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        ...meta.suicidalityTrace,
+        quote: primary.quote,
+      },
+      null,
+      2,
+    )}\n`,
     "utf8",
   );
 
-  console.info("\n===== META =====\n");
-  console.info(JSON.stringify(meta, null, 2));
-  console.info("\n===== TRANSMISSION HEBRAIQUE =====\n");
-  console.info(text);
-  console.info("\n===== FIN =====\n");
+  // Console : métadonnées techniques uniquement (pas de transmission / citations).
+  console.info(
+    JSON.stringify(
+      {
+        ok: evaluation.ok,
+        length: evaluation.length,
+        missingCount: evaluation.missing.length,
+        inventedCount: evaluation.invented.length,
+        model: written.model,
+        promptVersion: CLINICAL_REPORT_PROMPT_VERSION,
+      },
+      null,
+      2,
+    ),
+  );
 
   if (!evaluation.ok) {
-    console.error("Gold Case 001 FAILED", { missing: evaluation.missing, invented: evaluation.invented });
+    console.error("Gold Case 001 FAILED", {
+      missingCount: evaluation.missing.length,
+      inventedCount: evaluation.invented.length,
+    });
     process.exitCode = 1;
     return;
   }
@@ -162,6 +130,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error(error instanceof Error ? error.message : "gold case failed");
   process.exitCode = 1;
 });

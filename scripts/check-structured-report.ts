@@ -68,4 +68,29 @@ function baseExtraction(): StoredExtraction {
   if (sections.drivingRisk !== "NOT_ASSESSED") throw new Error("no driving mention → NOT_ASSESSED");
 }
 
+{
+  const extraction = baseExtraction();
+  extraction.plan = [
+    { text: "עבודה", evidence: [] },
+    { text: "חזרה לעבודה", evidence: [] },
+    { text: "המשך HAD", evidence: [] },
+    { text: "המשך עבודה CBT על רומינציה", evidence: [] },
+    { text: "עבודה על ביטחון עצמי", evidence: [] },
+  ];
+  const sections = composeStructuredSections({
+    extraction,
+    visitType: "IN_PERSON",
+    diagnosis: { primary: null, secondary: null },
+    medications: [],
+  });
+  const plan = sections.carePlan ?? "";
+  if (/(?:^|\n)• עבודה(?:\n|$)/.test(plan) || /חזרה לעבודה/.test(plan)) {
+    throw new Error("employment recommendation without documented work evaluation");
+  }
+  if (!plan.includes("המשך HAD")) throw new Error("general plan dropped");
+  if (!/עבודה CBT|עבודה על ביטחון/.test(plan)) {
+    throw new Error("therapeutic work phrasing incorrectly filtered");
+  }
+}
+
 console.info("check-structured-report: ok");

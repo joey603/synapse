@@ -40,6 +40,9 @@ if (!sections.patientStatusNote?.trim()) throw new Error("patientStatusNote empt
 if (!sections.mainProblems?.trim()) throw new Error("mainProblems empty");
 if (!sections.interventionsProvided?.trim()) throw new Error("interventionsProvided empty");
 if (!sections.carePlan?.trim()) throw new Error("carePlan empty");
+if (/(?:^|\n)• עבודה(?:\n|$)/.test(sections.carePlan) || /חזרה לעבודה|שיקום תעסוק|מקום העבודה/.test(sections.carePlan)) {
+  throw new Error("carePlan invents professional work without documented evaluation");
+}
 if (sections.drivingRisk !== "NOT_ASSESSED") throw new Error("drivingRisk must stay NOT_ASSESSED");
 if (sections.diagnosisNote) throw new Error("diagnosis must stay empty without Patient diagnosis");
 if (sections.currentMedication?.toLowerCase().includes("clozap")) {
@@ -74,18 +77,3 @@ if (!/הבחנה בין עובדה לפרשנות|פרשנות/.test(sections.in
 }
 
 console.info("check-jacky-pipeline: ok");
-console.info(
-  JSON.stringify(
-    {
-      patientStatusNote: sections.patientStatusNote,
-      drivingRisk: sections.drivingRisk,
-      diagnosisNote: sections.diagnosisNote,
-      mainProblems: sections.mainProblems,
-      currentMedication: sections.currentMedication,
-      interventionsProvided: sections.interventionsProvided,
-      carePlan: sections.carePlan,
-    },
-    null,
-    2,
-  ),
-);

@@ -24,10 +24,12 @@ export function SearchField({
   const router = useRouter();
   const [value, setValue] = useState(defaultValue);
   const extra = JSON.stringify(params ?? {});
+  const [seenDefaultValue, setSeenDefaultValue] = useState(defaultValue);
 
-  useEffect(() => {
+  if (seenDefaultValue !== defaultValue) {
+    setSeenDefaultValue(defaultValue);
     setValue(defaultValue);
-  }, [defaultValue]);
+  }
 
   useEffect(() => {
     const trimmed = value.trim();

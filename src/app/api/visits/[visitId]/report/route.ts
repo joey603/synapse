@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { DrivingRiskStatus } from "@prisma/client";
 
 import { audit } from "@/lib/audit";
-import { appUrl, getSession, isSameOrigin } from "@/lib/auth/session";
+import { getSession, isSameOrigin } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
 export const runtime = "nodejs";

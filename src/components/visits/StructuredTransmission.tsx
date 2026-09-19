@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { DrivingRiskStatus } from "@prisma/client";
 
 import { BidiRichText } from "@/components/ui/BidiRichText";
@@ -98,46 +98,44 @@ export function StructuredTransmission({
   const fieldClass = `min-h-40 w-full rounded-2xl bg-field px-3 py-3 text-base leading-7 text-ink outline-none ${BIDI_TEXT_CLASS}`;
   const fullClass = `min-h-56 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)] outline-none ${BIDI_TEXT_CLASS}`;
 
-  useEffect(() => {
-    const snapshot = {
-      visitId,
-      status,
-      validated,
-      durationMinutes: duration,
-      patientStatusNote: structured.patientStatusNote || "(vide)",
-      drivingRisk: structured.drivingRisk,
-      diagnosisNote: structured.diagnosisNote || "(vide)",
-      mainProblems: structured.mainProblems || "(vide)",
-      currentMedication: structured.currentMedication || "(vide)",
-      interventionsProvided: structured.interventionsProvided || "(vide)",
-      carePlan: structured.carePlan || "(vide)",
-      finalReportHe: text || "(vide)",
-      lengths: {
-        patientStatusNote: structured.patientStatusNote.length,
-        diagnosisNote: structured.diagnosisNote.length,
-        mainProblems: structured.mainProblems.length,
-        currentMedication: structured.currentMedication.length,
-        interventionsProvided: structured.interventionsProvided.length,
-        carePlan: structured.carePlan.length,
-        finalReportHe: text.length,
-      },
-    };
-    console.info("[Synapse Transmission] champs structurés", snapshot);
-    console.info("[Synapse Transmission] patientStatusNote:\n", structured.patientStatusNote || "(vide)");
-    console.info("[Synapse Transmission] drivingRisk:", structured.drivingRisk);
-    console.info("[Synapse Transmission] diagnosisNote:\n", structured.diagnosisNote || "(vide)");
-    console.info("[Synapse Transmission] mainProblems:\n", structured.mainProblems || "(vide)");
-    console.info("[Synapse Transmission] currentMedication:\n", structured.currentMedication || "(vide)");
-    console.info("[Synapse Transmission] interventionsProvided:\n", structured.interventionsProvided || "(vide)");
-    console.info("[Synapse Transmission] carePlan:\n", structured.carePlan || "(vide)");
-    console.info("[Synapse Transmission] finalReportHe (transmission complète):\n", text || "(vide)");
-  }, [visitId, status, validated, duration, structured, text]);
-
-  useEffect(() => {
+  const incomingKey = `${structuredKey}\u0000${initialText}\u0000${String(initialDurationMinutes)}`;
+  const [propsKey, setPropsKey] = useState(incomingKey);
+  if (propsKey !== incomingKey) {
+    setPropsKey(incomingKey);
     setText(initialText);
     setStructured(initialStructured);
     setDuration(initialDurationMinutes);
-  }, [initialText, initialDurationMinutes, structuredKey, initialStructured]);
+  }
+
+  const persist = useCallback(
+    async (payload: {
+      text: string;
+      structured: StructuredFields;
+      durationMinutes: number | null;
+    }) => {
+      try {
+        const response = await fetch(`/api/visits/${visitId}/report`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: stripBidiMarks(payload.text),
+            durationMinutes: payload.durationMinutes,
+            patientStatusNote: payload.structured.patientStatusNote || null,
+            drivingRisk: payload.structured.drivingRisk,
+            diagnosisNote: payload.structured.diagnosisNote || null,
+            mainProblems: payload.structured.mainProblems || null,
+            currentMedication: payload.structured.currentMedication || null,
+            interventionsProvided: payload.structured.interventionsProvided || null,
+            carePlan: payload.structured.carePlan || null,
+          }),
+        });
+        setNote(response.ok ? labels.saved : labels.lost);
+      } catch {
+        setNote(labels.lost);
+      }
+    },
+    [visitId, labels.saved, labels.lost],
+  );
 
   useEffect(() => {
     if (validated) return;
@@ -156,36 +154,17 @@ export function StructuredTransmission({
       void persist({ text, structured, durationMinutes: duration });
     }, 700);
     return () => window.clearTimeout(timer);
-    // initialStructured is synced via structuredKey above
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, structured, duration, validated, visitId, initialText, initialDurationMinutes]);
-
-  async function persist(payload: {
-    text: string;
-    structured: StructuredFields;
-    durationMinutes: number | null;
-  }) {
-    try {
-      const response = await fetch(`/api/visits/${visitId}/report`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: stripBidiMarks(payload.text),
-          durationMinutes: payload.durationMinutes,
-          patientStatusNote: payload.structured.patientStatusNote || null,
-          drivingRisk: payload.structured.drivingRisk,
-          diagnosisNote: payload.structured.diagnosisNote || null,
-          mainProblems: payload.structured.mainProblems || null,
-          currentMedication: payload.structured.currentMedication || null,
-          interventionsProvided: payload.structured.interventionsProvided || null,
-          carePlan: payload.structured.carePlan || null,
-        }),
-      });
-      setNote(response.ok ? labels.saved : labels.lost);
-    } catch {
-      setNote(labels.lost);
-    }
-  }
+  }, [
+    text,
+    structured,
+    duration,
+    validated,
+    visitId,
+    initialText,
+    initialDurationMinutes,
+    initialStructured,
+    persist,
+  ]);
 
   async function copyBlock(key: string, value: string) {
     try {

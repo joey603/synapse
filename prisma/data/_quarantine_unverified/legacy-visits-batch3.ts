@@ -3,7 +3,7 @@ import type { DrivingRiskStatus, VisitType } from "@prisma/client";
 import {
   composeLegacyHebrewReport,
   diagnosisFromPatient,
-} from "./legacy-hebrew-batch1";
+} from "../legacy-hebrew-batch1";
 
 export type LegacyBatch3Visit = {
   importKey: string;
@@ -29,9 +29,9 @@ export type LegacyBatch3Visit = {
 export { composeLegacyHebrewReport, diagnosisFromPatient };
 
 /**
- * Lot 3 — historique clinique hébreu (VALIDATED).
+ * Lot 3 — QUARANTINED (V1) — historique non intégralement vérifié à la source.
  * Reuben = orthographe DB pour « Reuven ».
- * Pinhas : absent des 40 patients importés → non importable ici.
+ * Ne pas importer. Ne pas réactiver sans vérification source par source.
  */
 export const LEGACY_VISITS_BATCH3: LegacyBatch3Visit[] = [
   {
@@ -219,33 +219,9 @@ export const LEGACY_VISITS_BATCH3: LegacyBatch3Visit[] = [
   },
 ];
 
-/**
- * Patient attendu mais absent des 40 dossiers importés.
- * Contenu clinique conservé pour import ultérieur (sans création Patient).
- * Attribution sources conservée dans le texte :
- * - halluc./délire → PATIENT + CURRENT
- * - évolution >1 an / inefficacité tx → FAMILY + HISTORICAL
- */
-export const LEGACY_BATCH3_MISSING_PATIENTS = [
-  {
-    importKey: "legacy-pinhas-ashdod-2026-09-16-1730-in-person",
-    label: "Pinhas — Ashdod",
-    reason: "Aucun patient Pinhas/Pinchas dans la base (absents des 40 patients Tsabar).",
-    draft: {
-      type: "IN_PERSON" as const,
-      when: "2026-09-16T17:30",
-      timeKnown: true,
-      patientStatusNote:
-        "ניכרת החמרה משמעותית במצב הפסיכוטי. המטופל עייף מאוד, שוכב במיטה, עם דלות משמעותית בדיבור ובשיתוף הפעולה.",
-      drivingRisk: "NOT_ASSESSED" as const,
-      mainProblems:
-        "הביקור התקיים בבית המטופל בנוכחות אמו ובהיעדר האב. בתחילת הביקור המטופל נמצא שוכב במיטה, נראה עייף מאוד, הדיבור דל והראיון עמו קצר ומוגבל. המטופל מדווח על שמיעת קולות ועל תכנים דלוזיונליים. נוכח מיעוט שיתוף הפעולה המשך איסוף המידע נעשה עם האם. האם מתארת מצב פסיכוטי הנמשך מעל שנה עם החמרה משמעותית בתקופה הנוכחית, ולדבריה הטיפולים התרופתיים שניתנו עד כה לא הביאו לשיפור מספק. למרות מצבו, המטופל יצא לאחרונה לירושלים בליווי.",
-      currentMedication:
-        "הטיפול התרופתי המדויק לא הוערך במלואו במסגרת המידע הזמין לביקור זה. האם מדווחת כי טיפולים תרופתיים שניתנו עד כה לא הביאו לשיפור מספק. יש להסתמך על רשימת הטיפול המעודכנת בתיק.",
-      interventionsProvided:
-        "בוצעה הערכה קלינית קצרה עם המטופל ובהמשך שיחה עם האם לצורך השלמת האנמנזה והערכת המצב. ניתנה פסיכו־הדרכה מקיפה לאם בנוגע לטיפול האנטי־פסיכוטי, לחשיבות ההיענות לטיפול, למעקב אחר יעילות ותופעות לוואי ולצורך בהמשך מעקב פסיכיאטרי הדוק.",
-      carePlan:
-        "המשך מעקב פסיכיאטרי וסיעודי צמוד במסגרת אשפוז בית בהתאם למצב הקליני. יש לעקוב אחר התסמינים הפסיכוטיים, רמת שיתוף הפעולה, התפקוד, ההיענות והתגובה לטיפול. יש לבצע הערכת מסוכנות חוזרת בהתאם ליכולת המטופל לשתף פעולה ולשקול הסלמת רמת הטיפול בהתאם להתפתחות הקלינית ולהערכת הצוות המטפל.",
-    },
-  },
-];
+/** Aucun patient hors cohort 40 — pas de brouillon pour patients absents. */
+export const LEGACY_BATCH3_MISSING_PATIENTS: Array<{
+  importKey: string;
+  label: string;
+  reason: string;
+}> = [];

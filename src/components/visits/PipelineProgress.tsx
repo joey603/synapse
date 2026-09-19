@@ -26,11 +26,13 @@ export function PipelineProgress({
   const router = useRouter();
   const [current, setCurrent] = useState(status);
   const [failedAt, setFailedAt] = useState<StepId | null>(null);
+  const [seenStatus, setSeenStatus] = useState(status);
 
-  useEffect(() => {
+  if (seenStatus !== status) {
+    setSeenStatus(status);
     setCurrent(status);
     if (status !== "FAILED") setFailedAt(null);
-  }, [status]);
+  }
 
   useEffect(() => {
     if (current === "READY" || current === "FAILED") return;

@@ -229,22 +229,6 @@ export default async function VisitPage({
                 previous={previousExtraction}
               />
             ) : null}
-            {(() => {
-              console.info("[Synapse Transmission SSR] visit=%s status=%s", visit.id, visit.report.status);
-              console.info("[Synapse Transmission SSR] patientStatusNote:\n%s", visit.report.patientStatusNote || "(vide)");
-              console.info("[Synapse Transmission SSR] drivingRisk: %s", visit.report.drivingRisk);
-              console.info("[Synapse Transmission SSR] diagnosisNote:\n%s", visit.report.diagnosisNote || "(vide)");
-              console.info("[Synapse Transmission SSR] mainProblems:\n%s", visit.report.mainProblems || "(vide)");
-              console.info("[Synapse Transmission SSR] currentMedication:\n%s", visit.report.currentMedication || "(vide)");
-              console.info("[Synapse Transmission SSR] interventionsProvided:\n%s", visit.report.interventionsProvided || "(vide)");
-              console.info("[Synapse Transmission SSR] carePlan:\n%s", visit.report.carePlan || "(vide)");
-              console.info(
-                "[Synapse Transmission SSR] finalReportHe length=%d:\n%s",
-                reportText.length,
-                reportText || "(vide)",
-              );
-              return null;
-            })()}
             <StructuredTransmission
               key={`structured-${visit.id}-${visit.report.mainProblems?.length ?? 0}-${visit.report.patientStatusNote?.length ?? 0}`}
               visitId={visit.id}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { BidiRichText } from "@/components/ui/BidiRichText";
 import { BIDI_TEXT_CLASS, stripBidiMarks, textDirection, wrapRtlIsolates } from "@/lib/i18n/text-direction";
@@ -36,10 +36,28 @@ export function ReportEditor({
   const [note, setNote] = useState("");
   const direction = textDirection(text);
   const fieldClass = `min-h-72 w-full rounded-3xl bg-field px-4 py-4 text-base leading-7 text-ink shadow-[0_8px_24px_rgba(27,36,48,0.06)] outline-none ${BIDI_TEXT_CLASS}`;
+  const [seenInitialText, setSeenInitialText] = useState(initialText);
 
-  useEffect(() => {
+  if (seenInitialText !== initialText) {
+    setSeenInitialText(initialText);
     setText(initialText);
-  }, [initialText]);
+  }
+
+  const save = useCallback(
+    async (value: string) => {
+      try {
+        const response = await fetch(`/api/visits/${visitId}/report`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: stripBidiMarks(value) }),
+        });
+        setNote(response.ok ? labels.saved : labels.lost);
+      } catch {
+        setNote(labels.lost);
+      }
+    },
+    [visitId, labels.saved, labels.lost],
+  );
 
   useEffect(() => {
     if (validated || text === initialText) return;
@@ -47,20 +65,7 @@ export function ReportEditor({
       void save(text);
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [initialText, text, validated, visitId]);
-
-  async function save(value: string) {
-    try {
-      const response = await fetch(`/api/visits/${visitId}/report`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: stripBidiMarks(value) }),
-      });
-      setNote(response.ok ? labels.saved : labels.lost);
-    } catch {
-      setNote(labels.lost);
-    }
-  }
+  }, [initialText, text, validated, save]);
 
   async function copy() {
     if (!validated && !window.confirm(labels.copyWarn)) return;

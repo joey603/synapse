@@ -34,7 +34,7 @@ export function BottomNav({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     if (!patientId) {
-      setPatient(null);
+      queueMicrotask(() => setPatient(null));
       return;
     }
     let stop = false;

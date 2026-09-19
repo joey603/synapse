@@ -199,12 +199,20 @@ function composeCitedList(items: Array<{ text: string }>) {
   return lines.length > 0 ? lines.map((line) => `• ${line}`).join("\n") : null;
 }
 
-const WORK_PLAN_RE =
-  /חיזוק\s+עבודה|תפקוד\s+תעסוק|חזרה\s+לעבודה|מקום\s+העבודה|שיקום\s+תעסוק|להגביר\s+עבודה|בעבודה\s+ובתפקוד/i;
+/** Travail thérapeutique (« עבודה על », CBT) — pas une recommandation d’emploi. */
+const THERAPEUTIC_WORK_RE =
+  /עבודה\s+(על|קוגניטיב)|עבודה\s*(CBT|TCC)|המשך\s+עבודה\s+(CBT|על|קוגניטיב)|עבודה\s+עצמית/i;
 
 /**
- * Plan : uniquement ce qui est validé. Ne pas introduire un axe « עבודה »
- * si functioning/work n’a pas été documenté comme present CURRENT.
+ * Recommandation d’emploi / domaine fonctionnel « travail » spécifique.
+ * Ne doit pas apparaître sans evidence CURRENT documentée (functioning|work|activity).
+ */
+const EMPLOYMENT_PLAN_RE =
+  /(?:^|[\s•\-–—])עבודה(?:$|[\s.,;:!?])|תעסוק|חזרה\s+לעבודה|מקום\s+העבודה|שיקום\s+תעסוק|להגביר\s+עבודה|בעבודה\s+ובתפקוד|מסגרת\s+עבודה|יציאה\s+לעבודה|חיזוק\s+עבודה(?!\s+על)|תפקוד\s+תעסוק/i;
+
+/**
+ * Plan : uniquement ce qui est validé. Ne pas introduire un axe emploi « עבודה »
+ * si functioning/work/activity n’a pas été documenté comme present CURRENT.
  */
 function composeCarePlan(extraction: StoredExtraction) {
   const workDocumented = ["functioning", "work", "activity"].some((domain) => {
@@ -221,8 +229,13 @@ function composeCarePlan(extraction: StoredExtraction) {
     .map((item) => hebrewClinicalText(item.text))
     .filter((text): text is string => Boolean(text))
     .filter((text) => {
-      if (!WORK_PLAN_RE.test(text)) return true;
-      return workDocumented;
+      const trimmed = text.trim();
+      if (trimmed === "עבודה" || trimmed === "תעסוקה") {
+        return workDocumented;
+      }
+      if (THERAPEUTIC_WORK_RE.test(text)) return true;
+      if (EMPLOYMENT_PLAN_RE.test(text)) return workDocumented;
+      return true;
     });
 
   return lines.length > 0 ? lines.map((line) => `• ${line}`).join("\n") : null;

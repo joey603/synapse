@@ -82,9 +82,13 @@ export function NearbyView({
     showFix(point);
     setStreet(null);
   }, [showFix]);
-  snapToStreetRef.current = snapToStreet;
 
   useEffect(() => {
+    snapToStreetRef.current = snapToStreet;
+  }, [snapToStreet]);
+
+  useEffect(() => {
+    let hadCachedFix = false;
     try {
       const cached = sessionStorage.getItem("synapse_here");
       if (cached) {
@@ -93,7 +97,8 @@ export function NearbyView({
         const lng = Number(parsed.lng);
         if (Number.isFinite(lat) && Number.isFinite(lng)) {
           lastRaw.current = { lat, lng };
-          showFix({ lat, lng });
+          hadCachedFix = true;
+          queueMicrotask(() => showFix({ lat, lng }));
         }
       }
     } catch {
@@ -101,7 +106,7 @@ export function NearbyView({
     }
 
     if (!navigator.geolocation) {
-      if (!hasFix.current) setGeo("denied");
+      if (!hasFix.current && !hadCachedFix) setGeo("denied");
       return;
     }
 

@@ -1,4 +1,5 @@
 import { scrubForbidden } from "@/lib/clinical/forbidden-phrases";
+import { getClinicalModel, getTranscribeModel } from "@/lib/ai/models";
 import { EXTRACTION_RULES, PROMPT_VERSION as EXTRACTION_PROMPT } from "../../../prompts/clinical-extraction";
 import {
   CLINICAL_REPORT_SYSTEM,
@@ -11,8 +12,8 @@ import type { StoredExtraction } from "@/lib/clinical/types";
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions";
 
-const transcribeModel = () => process.env.AI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe";
-const clinicalModel = () => process.env.AI_CLINICAL_MODEL || "gpt-4.1-mini";
+const transcribeModel = () => getTranscribeModel();
+const clinicalModel = () => getClinicalModel();
 
 export const openaiTranscription: TranscriptionProvider = {
   async transcribe({ audio, mimeType, filename }) {

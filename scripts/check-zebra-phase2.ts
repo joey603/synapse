@@ -724,20 +724,6 @@ async function main() {
     ok("gold-finalReportHe-richness");
   }
 
-  // Print Jacky zebra sample for rapport
-  {
-    const validated = validateExtraction(jackyExpectedRawExtraction(), JACKY_HAD_TRANSCRIPT, "");
-    const sections = composeStructuredSections({
-      extraction: validated!,
-      visitType: "IN_PERSON",
-      diagnosis: { primary: null, secondary: null },
-      medications: [],
-      sex: "MALE",
-    });
-    console.info("\n===== JACKY ZEBRA SAMPLE =====\n");
-    console.info(JSON.stringify(sections, null, 2));
-  }
-
   if (failed > 0) {
     console.error(`\ncheck-zebra-phase2: ${failed} failed`);
     process.exitCode = 1;

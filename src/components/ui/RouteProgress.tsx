@@ -6,10 +6,12 @@ import { useEffect, useState } from "react";
 export function RouteProgress({ label }: { label: string }) {
   const pathname = usePathname();
   const [pending, setPending] = useState(false);
+  const [seenPath, setSeenPath] = useState(pathname);
 
-  useEffect(() => {
+  if (seenPath !== pathname) {
+    setSeenPath(pathname);
     setPending(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
