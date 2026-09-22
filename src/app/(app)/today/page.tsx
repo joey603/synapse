@@ -8,7 +8,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { weeklyHadShortLabel } from "@/components/visits/WeeklyHadProgress";
 import { visitTypeLabel } from "@/lib/clinical/templates";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
 import { weekStartsOnFor } from "@/lib/visits/had-week";
@@ -23,49 +23,51 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const now = new Date();
   const { start, end } = jerusalemDayBounds(now);
   const today = jerusalemDateKey(now);
-  const [visits, leftover, important] = await Promise.all([
-    db.visit.findMany({
-      where: { occurredAt: { gte: start, lt: end } },
-      orderBy: { occurredAt: "asc" },
-      include: {
-        patient: {
-          select: {
-            firstName: true,
-            lastName: true,
-            city: true,
-            weeklyInPersonVisits: true,
-            weeklyVirtualVisits: true,
+  const [visits, leftover, important] = await withDbRetry(() =>
+    Promise.all([
+      db.visit.findMany({
+        where: { occurredAt: { gte: start, lt: end } },
+        orderBy: { occurredAt: "asc" },
+        include: {
+          patient: {
+            select: {
+              firstName: true,
+              lastName: true,
+              city: true,
+              weeklyInPersonVisits: true,
+              weeklyVirtualVisits: true,
+            },
           },
+          report: { select: { status: true } },
+          recording: { select: { status: true } },
+          transcript: { select: { id: true } },
+          extraction: { select: { id: true } },
         },
-        report: { select: { status: true } },
-        recording: { select: { status: true } },
-        transcript: { select: { id: true } },
-        extraction: { select: { id: true } },
-      },
-    }),
-    db.visit.findMany({
-      where: {
-        occurredAt: { lt: start },
-        OR: [{ report: null }, { report: { is: { status: { not: "VALIDATED" } } } }],
-      },
-      orderBy: { occurredAt: "desc" },
-      take: 12,
-      include: {
-        patient: { select: { firstName: true, lastName: true } },
-        report: { select: { status: true } },
-        recording: { select: { status: true } },
-        transcript: { select: { id: true } },
-        extraction: { select: { id: true } },
-      },
-    }),
-    db.task.count({
-      where: {
-        status: { not: "DONE" },
-        priority: { in: ["IMPORTANT", "URGENT"] },
-        OR: [{ dueDate: null }, { dueDate: { lte: new Date(`${today}T12:00:00.000Z`) } }],
-      },
-    }),
-  ]);
+      }),
+      db.visit.findMany({
+        where: {
+          occurredAt: { lt: start },
+          OR: [{ report: null }, { report: { is: { status: { not: "VALIDATED" } } } }],
+        },
+        orderBy: { occurredAt: "desc" },
+        take: 12,
+        include: {
+          patient: { select: { firstName: true, lastName: true } },
+          report: { select: { status: true } },
+          recording: { select: { status: true } },
+          transcript: { select: { id: true } },
+          extraction: { select: { id: true } },
+        },
+      }),
+      db.task.count({
+        where: {
+          status: { not: "DONE" },
+          priority: { in: ["IMPORTANT", "URGENT"] },
+          OR: [{ dueDate: null }, { dueDate: { lte: new Date(`${today}T12:00:00.000Z`) } }],
+        },
+      }),
+    ]),
+  );
 
   const dated = visits.map(withFlow);
   const weekByPatient = await loadWeeklyHadForPatients(

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 import { NearbyView } from "@/components/nearby/NearbyView";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { placeKey } from "@/lib/geo/place";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
@@ -9,20 +9,22 @@ import { t } from "@/lib/i18n/messages";
 export default async function NearbyPage() {
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
-  const rows = await db.patient.findMany({
-    where: { status: "ACTIVE", OR: [{ address: { not: null } }, { city: { not: null } }] },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      address: true,
-      city: true,
-      latitude: true,
-      longitude: true,
-      geoKey: true,
-    },
-  });
+  const rows = await withDbRetry(() =>
+    db.patient.findMany({
+      where: { status: "ACTIVE", OR: [{ address: { not: null } }, { city: { not: null } }] },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        address: true,
+        city: true,
+        latitude: true,
+        longitude: true,
+        geoKey: true,
+      },
+    }),
+  );
 
   return (
     <div className="flex flex-col gap-5">

@@ -12,7 +12,7 @@ import { StatusBadge, toneForPatientStatus } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { jerusalemDay } from "@/lib/clinical/cockpit";
 import { visitTypeLabel } from "@/lib/clinical/templates";
-import { db, join } from "@/lib/db";
+import { db, join, withDbRetry } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 import { patientPhotoUrl } from "@/lib/patients/photo";
@@ -33,20 +33,22 @@ export default async function PatientDetailPage({
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
 
-  const patient = await db.patient.findUnique({
-    ...join,
-    where: { id },
-    include: {
-      visits: {
-        orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
-        take: 100,
-        include: { report: true, recording: true, transcript: { select: { id: true } }, extraction: { select: { id: true } } },
-      },
-      medications: { where: { active: true }, orderBy: { name: "asc" } },
+  const patient = await withDbRetry(() =>
+    db.patient.findUnique({
+      ...join,
+      where: { id },
+      include: {
+        visits: {
+          orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+          take: 100,
+          include: { report: true, recording: true, transcript: { select: { id: true } }, extraction: { select: { id: true } } },
+        },
+        medications: { where: { active: true }, orderBy: { name: "asc" } },
       events: { orderBy: { occurredAt: "desc" }, take: 100 },
       tasks: { orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }], take: 100 },
     },
-  });
+    }),
+  );
 
   if (!patient) notFound();
 

@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PatientListRow } from "@/components/ui/PatientListRow";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 import { patientPhotoUrl } from "@/lib/patients/photo";
@@ -25,22 +25,24 @@ export default async function PatientsPage({
   const statusFilter: PatientStatus | undefined =
     tab === "all" ? undefined : tab === "pending" ? "ACTIVE" : "ACTIVE";
 
-  const patients = await db.patient.findMany({
-    where: {
-      ...(statusFilter ? { status: statusFilter } : {}),
-      ...(query
-        ? {
-            OR: [
-              { firstName: { contains: query, mode: "insensitive" } },
-              { lastName: { contains: query, mode: "insensitive" } },
-              { city: { contains: query, mode: "insensitive" } },
-              { phone: { contains: query, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-  });
+  const patients = await withDbRetry(() =>
+    db.patient.findMany({
+      where: {
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(query
+          ? {
+              OR: [
+                { firstName: { contains: query, mode: "insensitive" } },
+                { lastName: { contains: query, mode: "insensitive" } },
+                { city: { contains: query, mode: "insensitive" } },
+                { phone: { contains: query, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    }),
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">

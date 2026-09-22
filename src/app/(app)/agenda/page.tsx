@@ -9,7 +9,7 @@ import { weeklyHadShortLabel } from "@/components/visits/WeeklyHadProgress";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
-import { db, join } from "@/lib/db";
+import { db, join, withDbRetry } from "@/lib/db";
 import { resolveLocale, type Locale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 import { weekStartsOnFor } from "@/lib/visits/had-week";
@@ -36,11 +36,13 @@ export default async function AgendaPage({
   const monthKnown = monthKeyOf(month) ?? (requestedDay ? requestedDay.slice(0, 7) : null);
   const needsEditFirst = Boolean(edit && !monthKnown);
   const editingFirst = needsEditFirst
-    ? await db.visit.findUnique({
-        where: { id: edit },
-        ...join,
-        include: { patient: { select: { id: true, firstName: true, lastName: true } } },
-      })
+    ? await withDbRetry(() =>
+        db.visit.findUnique({
+          where: { id: edit },
+          ...join,
+          include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+        }),
+      )
     : null;
 
   const monthKey =
@@ -61,46 +63,48 @@ export default async function AgendaPage({
   const weekStart = weekStartsOnFor(locale);
   const leading = weekdayColumn(days[0]!, weekStart);
 
-  const [editing, patients, visits] = await Promise.all([
-    edit && !editingFirst
-      ? db.visit.findUnique({
-          where: { id: edit },
-          ...join,
-          include: { patient: { select: { id: true, firstName: true, lastName: true } } },
-        })
-      : editingFirst,
-    showSchedule && !edit
-      ? db.patient.findMany({
-          where: { status: "ACTIVE" },
-          orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            city: true,
-            weeklyInPersonVisits: true,
-            weeklyVirtualVisits: true,
-          },
-        })
-      : [],
-    db.visit.findMany({
-      ...join,
-      where: { occurredAt: { gte: rangeStart, lt: rangeEnd } },
-      orderBy: { occurredAt: "asc" },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            city: true,
-            weeklyInPersonVisits: true,
-            weeklyVirtualVisits: true,
+  const [editing, patients, visits] = await withDbRetry(() =>
+    Promise.all([
+      edit && !editingFirst
+        ? db.visit.findUnique({
+            where: { id: edit },
+            ...join,
+            include: { patient: { select: { id: true, firstName: true, lastName: true } } },
+          })
+        : editingFirst,
+      showSchedule && !edit
+        ? db.patient.findMany({
+            where: { status: "ACTIVE" },
+            orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              city: true,
+              weeklyInPersonVisits: true,
+              weeklyVirtualVisits: true,
+            },
+          })
+        : [],
+      db.visit.findMany({
+        ...join,
+        where: { occurredAt: { gte: rangeStart, lt: rangeEnd } },
+        orderBy: { occurredAt: "asc" },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              city: true,
+              weeklyInPersonVisits: true,
+              weeklyVirtualVisits: true,
+            },
           },
         },
-      },
-    }),
-  ]);
+      }),
+    ]),
+  );
 
   const counts = new Map<string, number>();
   for (const visit of visits) {

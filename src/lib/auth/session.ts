@@ -14,7 +14,7 @@ import {
   SESSION_USER_COOKIE,
 } from "@/lib/auth/constants";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { db, withDbRetry } from "@/lib/db";
+import { db, isTransientDbError, withDbRetry } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
 export type SessionUser = {
@@ -88,7 +88,12 @@ async function loadSession(): Promise<SessionLookup> {
     return { status: "ok", user: row.user };
   } catch (error) {
     const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : "unknown";
-    logger.info("auth.session_lookup_failed", { code });
+    logger.info("auth.session_lookup_failed", {
+      code,
+      transient: isTransientDbError(error),
+    });
+    // Un blip DB ne doit pas déconnecter : on laisse remonter après retries.
+    if (isTransientDbError(error)) throw error;
     return { status: "invalid" };
   }
 }

@@ -15,6 +15,7 @@ export async function nearestRoad(point: { lat: number; lng: number }) {
     throw new Error("nearest_body");
   }
   const distance = hit.distance ?? 0;
-  if (distance > 250) return { ...point, name: null as string | null };
+  // Les centroïdes d’immeuble / cours sont souvent à >250 m de la chaussée.
+  if (distance > 450) return { ...point, name: null as string | null };
   return { lat, lng, name: hit.name?.trim() || null };
 }

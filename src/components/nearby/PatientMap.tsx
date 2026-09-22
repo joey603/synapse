@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 
+import { openWazeNavigation } from "@/lib/geo/open-waze";
+
 export type MapPin = {
   id: string;
   lat: number;
@@ -11,6 +13,8 @@ export type MapPin = {
   rank: number;
   href: string;
   action: string;
+  address?: string | null;
+  city?: string | null;
 };
 
 export function PatientMap({
@@ -116,15 +120,27 @@ function paint(
     title.style.margin = "0";
     title.style.fontSize = "14px";
     title.style.fontWeight = "600";
-    const link = document.createElement("a");
-    link.href = pin.href;
-    link.rel = "noreferrer";
+    const link = document.createElement("button");
+    link.type = "button";
     link.textContent = pin.action;
     link.style.display = "inline-block";
     link.style.marginTop = "6px";
     link.style.fontSize = "14px";
     link.style.fontWeight = "600";
     link.style.color = "#1e4d6b";
+    link.style.background = "transparent";
+    link.style.border = "0";
+    link.style.padding = "0";
+    link.style.cursor = "pointer";
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      void openWazeNavigation({
+        latitude: pin.lat,
+        longitude: pin.lng,
+        address: pin.address,
+        city: pin.city,
+      });
+    });
     body.append(title, link);
     leaflet
       .marker([pin.lat, pin.lng], {

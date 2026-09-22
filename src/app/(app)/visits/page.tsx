@@ -8,7 +8,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
-import { db, join } from "@/lib/db";
+import { db, join, withDbRetry } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 
@@ -16,20 +16,22 @@ export default async function RecentVisitsPage({ searchParams }: { searchParams:
   const { tab = "visits" } = await searchParams;
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
-  const visits = await db.visit.findMany({
-    where: { occurredAt: { lte: new Date() } },
-    take: 40,
-    orderBy: { occurredAt: "desc" },
-    ...join,
-    select: {
-      id: true,
-      type: true,
-      occurredAt: true,
-      patientId: true,
-      patient: { select: { firstName: true, lastName: true } },
-      report: { select: { status: true } },
-    },
-  });
+  const visits = await withDbRetry(() =>
+    db.visit.findMany({
+      where: { occurredAt: { lte: new Date() } },
+      take: 40,
+      orderBy: { occurredAt: "desc" },
+      ...join,
+      select: {
+        id: true,
+        type: true,
+        occurredAt: true,
+        patientId: true,
+        patient: { select: { firstName: true, lastName: true } },
+        report: { select: { status: true } },
+      },
+    }),
+  );
 
   return (
     <div className="flex flex-col gap-5">

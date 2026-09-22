@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { visitTypeLabel } from "@/lib/clinical/templates";
-import { db, join } from "@/lib/db";
+import { db, join, withDbRetry } from "@/lib/db";
 import { resolveLocale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 import { BIDI_TEXT_CLASS, textDirection } from "@/lib/i18n/text-direction";
@@ -13,12 +13,14 @@ import { BIDI_TEXT_CLASS, textDirection } from "@/lib/i18n/text-direction";
 export default async function TransmissionsPage() {
   const store = await cookies();
   const locale = resolveLocale(store.get("synapse_locale")?.value);
-  const reports = await db.clinicalReport.findMany({
-    where: { status: { in: ["AI_GENERATED", "REVIEWED"] } },
-    orderBy: { visit: { occurredAt: "desc" } },
-    ...join,
-    include: { visit: { include: { patient: { select: { firstName: true, lastName: true } } } } },
-  });
+  const reports = await withDbRetry(() =>
+    db.clinicalReport.findMany({
+      where: { status: { in: ["AI_GENERATED", "REVIEWED"] } },
+      orderBy: { visit: { occurredAt: "desc" } },
+      ...join,
+      include: { visit: { include: { patient: { select: { firstName: true, lastName: true } } } } },
+    }),
+  );
 
   return (
     <div className="flex flex-col gap-5">

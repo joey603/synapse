@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { haversineMeters } from "@/lib/geo/distance";
+import { openWazeNavigation } from "@/lib/geo/open-waze";
+import { wazeNavigateHref } from "@/lib/geo/waze-link";
 import type { Locale } from "@/lib/i18n/locale";
 import { t } from "@/lib/i18n/messages";
 
@@ -252,11 +254,13 @@ export function NearbyView({
           lng: patient.longitude,
           label: `${patient.firstName} ${patient.lastName}`,
           rank: index + 1,
-          href: wazeHref(patient, here),
+          href: wazeNavigateHref(patient) ?? "#",
           action: t(locale, "nearbyItinerary"),
+          address: patient.address,
+          city: patient.city,
         }];
       }),
-    [ordered, locale, here],
+    [ordered, locale],
   );
 
   if (patients.length === 0) {
@@ -287,7 +291,13 @@ export function NearbyView({
           return (
             <div key={patient.id}>
               {index > 0 ? <div className="border-t border-line/70" /> : null}
-              <a href={wazeHref(patient, here)} rel="noreferrer" className="flex min-h-[4.5rem] items-center gap-3 px-4 py-3 active:bg-surface/70">
+              <button
+                type="button"
+                onClick={() => {
+                  void openWazeNavigation(patient);
+                }}
+                className="flex min-h-[4.5rem] w-full items-center gap-3 px-4 py-3 text-start active:bg-surface/70"
+              >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent-strong">
                   {located ? index + 1 : "–"}
                 </span>
@@ -310,7 +320,7 @@ export function NearbyView({
                   ) : null}
                   <span className="block text-sm font-semibold text-accent">{t(locale, "nearbyItinerary")}</span>
                 </span>
-              </a>
+              </button>
             </div>
           );
         })}
@@ -332,18 +342,6 @@ function score(
 
 function placeLine(patient: NearbyPatient) {
   return [patient.address, patient.city].filter(Boolean).join(", ");
-}
-
-function wazeHref(patient: NearbyPatient, here: { lat: number; lng: number } | null) {
-  if (here && patient.latitude != null && patient.longitude != null) {
-    return `https://www.waze.com/live-map/directions?from=ll.${here.lat},${here.lng}&to=ll.${patient.latitude},${patient.longitude}&navigate=yes`;
-  }
-  if (patient.latitude != null && patient.longitude != null) {
-    const start = here ? `&from=${here.lat},${here.lng}` : "";
-    return `https://waze.com/ul?ll=${patient.latitude},${patient.longitude}${start}&navigate=yes`;
-  }
-  const start = here ? `&from=${here.lat},${here.lng}` : "";
-  return `https://waze.com/ul?q=${encodeURIComponent(placeLine(patient))}${start}&navigate=yes`;
 }
 
 function formatDrive(seconds: number, locale: Locale) {

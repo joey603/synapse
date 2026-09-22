@@ -6,6 +6,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import type { Locale } from "@/lib/i18n/locale";
 import { t, type MessageKey } from "@/lib/i18n/messages";
+import { openWazeNavigation } from "@/lib/geo/open-waze";
+import { wazeNavigateHref } from "@/lib/geo/waze-link";
 import { requestVisitFlushSave } from "@/lib/visits/flush-save";
 import { Button } from "@/components/ui/Button";
 
@@ -69,12 +71,21 @@ export function BottomNav({ locale }: { locale: Locale }) {
 
   if (patientId) {
     const callHref = telHref(patient?.phone ?? null);
-    const routeHref = wazeHref(patient);
+    const canRoute = Boolean(wazeNavigateHref(patient ?? {}));
     return (
       <Shell>
         <BackButton label={t(locale, "navBack")} fallback="/patients" />
         <NavAction href={callHref} label={t(locale, "navCall")} icon={CallIcon} disabled={!callHref} external />
-        <NavAction href={routeHref} label={t(locale, "navRoute")} icon={RouteIcon} disabled={!routeHref} external />
+        <NavAction
+          href={null}
+          label={t(locale, "navRoute")}
+          icon={RouteIcon}
+          disabled={!canRoute}
+          onClick={() => {
+            if (!patient) return;
+            void openWazeNavigation(patient);
+          }}
+        />
         <NavLink href={`/patients/${patientId}/visits/new`} label={t(locale, "navVisit")} icon={VisitIcon} accent />
       </Shell>
     );
@@ -392,14 +403,16 @@ function NavAction({
   icon: Icon,
   disabled,
   external = false,
+  onClick,
 }: {
   href: string | null;
   label: string;
   icon: () => ReactNode;
   disabled: boolean;
   external?: boolean;
+  onClick?: () => void;
 }) {
-  if (disabled || !href) {
+  if (disabled || (!href && !onClick)) {
     return (
       <span className={`${NAV_ITEM} text-faint/40`}>
         <Icon />
@@ -408,9 +421,18 @@ function NavAction({
     );
   }
 
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={`${NAV_ITEM} text-faint active:text-accent`}>
+        <Icon />
+        <span className="w-full truncate text-center leading-3">{label}</span>
+      </button>
+    );
+  }
+
   return (
     <a
-      href={href}
+      href={href!}
       rel={external ? "noreferrer" : undefined}
       className={`${NAV_ITEM} text-faint active:text-accent`}
     >
@@ -440,16 +462,6 @@ function telHref(phone: string | null) {
   const digits = first.replace(/[^\d+]/g, "");
   if (digits.replace(/\D/g, "").length < 8) return null;
   return `tel:${digits}`;
-}
-
-function wazeHref(patient: PatientNav | null) {
-  if (!patient) return null;
-  if (patient.latitude != null && patient.longitude != null) {
-    return `https://waze.com/ul?ll=${patient.latitude},${patient.longitude}&navigate=yes`;
-  }
-  const place = [patient.address, patient.city].filter(Boolean).join(", ");
-  if (!place) return null;
-  return `https://waze.com/ul?q=${encodeURIComponent(place)}&navigate=yes`;
 }
 
 function HomeIcon() {
