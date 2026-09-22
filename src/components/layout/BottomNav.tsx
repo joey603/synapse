@@ -83,7 +83,10 @@ export function BottomNav({ locale }: { locale: Locale }) {
           disabled={!canRoute}
           onClick={() => {
             if (!patient) return;
-            void openWazeNavigation(patient);
+            void openWazeNavigation({
+              ...patient,
+              from: readCachedHere(),
+            });
           }}
         />
         <NavLink href={`/patients/${patientId}/visits/new`} label={t(locale, "navVisit")} icon={VisitIcon} accent />
@@ -462,6 +465,20 @@ function telHref(phone: string | null) {
   const digits = first.replace(/[^\d+]/g, "");
   if (digits.replace(/\D/g, "").length < 8) return null;
   return `tel:${digits}`;
+}
+
+function readCachedHere(): { latitude: number; longitude: number } | null {
+  try {
+    const raw = sessionStorage.getItem("synapse_here");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { lat?: unknown; lng?: unknown };
+    const lat = Number(parsed.lat);
+    const lng = Number(parsed.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { latitude: lat, longitude: lng };
+  } catch {
+    return null;
+  }
 }
 
 function HomeIcon() {

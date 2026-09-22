@@ -294,7 +294,10 @@ export function NearbyView({
               <button
                 type="button"
                 onClick={() => {
-                  void openWazeNavigation(patient);
+                  void openWazeNavigation({
+                    ...patient,
+                    from: here ? { latitude: here.lat, longitude: here.lng } : null,
+                  });
                 }}
                 className="flex min-h-[4.5rem] w-full items-center gap-3 px-4 py-3 text-start active:bg-surface/70"
               >

@@ -1,60 +1,67 @@
 "use client";
 
-import { finiteCoord, wazeNavigateHref } from "@/lib/geo/waze-link";
+import { finiteCoord, wazeNativeHref, wazeNavigateHref } from "@/lib/geo/waze-link";
 
 type WazeTarget = {
   latitude?: number | null;
   longitude?: number | null;
   address?: string | null;
   city?: string | null;
+  from?: { latitude?: number | null; longitude?: number | null } | null;
 };
 
 /**
- * Ouvre Waze vers le patient.
- * - Adresse si dispo (Waze géocode mieux qu’un point Nominatim hors route).
- * - Sinon coordonnées calées sur la chaussée.
- * - Jamais de `from=` : Waze part du GPS téléphone (paramètre non documenté → « no way to drive »).
+ * Ouvre Waze vers un point déjà sur le réseau Waze.
+ * Pas d’adresse en `q` + navigate (souvent « no way to drive »),
+ * pas de `from=` (non supporté).
  */
 export async function openWazeNavigation(target: WazeTarget) {
-  const address = typeof target.address === "string" ? target.address.trim() : "";
-  const city = typeof target.city === "string" ? target.city.trim() : "";
-  const hasAddress = Boolean(address || city);
-
-  if (hasAddress) {
-    const href = wazeNavigateHref({
-      address,
-      city,
-      preferAddress: true,
-    });
-    if (href) {
-      window.location.assign(href);
-      return true;
-    }
-  }
-
   let latitude = finiteCoord(target.latitude);
   let longitude = finiteCoord(target.longitude);
-  if (latitude == null || longitude == null) return false;
+  const fromLat = finiteCoord(target.from?.latitude);
+  const fromLng = finiteCoord(target.from?.longitude);
 
-  const snapped = await snapRoad({ lat: latitude, lng: longitude });
-  if (snapped) {
-    latitude = snapped.lat;
-    longitude = snapped.lng;
+  if (latitude != null && longitude != null) {
+    const snapped = await snapOnWaze({
+      lat: latitude,
+      lng: longitude,
+      fromLat,
+      fromLng,
+    });
+    if (snapped) {
+      latitude = snapped.lat;
+      longitude = snapped.lng;
+    }
+    openWazeApp(latitude, longitude);
+    return true;
   }
 
-  const href = wazeNavigateHref({ latitude, longitude });
+  const href = wazeNavigateHref({
+    address: target.address,
+    city: target.city,
+  });
   if (!href) return false;
   window.location.assign(href);
   return true;
 }
 
-async function snapRoad(point: { lat: number; lng: number }) {
+async function snapOnWaze(input: {
+  lat: number;
+  lng: number;
+  fromLat: number | null;
+  fromLng: number | null;
+}) {
   try {
-    const response = await fetch("/api/nearby/snap", {
+    const response = await fetch("/api/nearby/navigate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify(point),
+      body: JSON.stringify({
+        lat: input.lat,
+        lng: input.lng,
+        fromLat: input.fromLat,
+        fromLng: input.fromLng,
+      }),
     });
     if (!response.ok) return null;
     const body = (await response.json()) as { lat?: unknown; lng?: unknown };
@@ -65,4 +72,14 @@ async function snapRoad(point: { lat: number; lng: number }) {
   } catch {
     return null;
   }
+}
+
+function openWazeApp(lat: number, lng: number) {
+  const native = wazeNativeHref(lat, lng);
+  const web = wazeNavigateHref({ latitude: lat, longitude: lng });
+  if (!web) return;
+  window.location.assign(native);
+  window.setTimeout(() => {
+    if (document.visibilityState === "visible") window.location.assign(web);
+  }, 700);
 }

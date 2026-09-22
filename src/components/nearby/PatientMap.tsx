@@ -134,11 +134,13 @@ function paint(
     link.style.cursor = "pointer";
     link.addEventListener("click", (event) => {
       event.preventDefault();
+      const origin = data.here;
       void openWazeNavigation({
         latitude: pin.lat,
         longitude: pin.lng,
         address: pin.address,
         city: pin.city,
+        from: origin ? { latitude: origin.lat, longitude: origin.lng } : null,
       });
     });
     body.append(title, link);
