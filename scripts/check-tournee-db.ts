@@ -116,7 +116,7 @@ async function main() {
     week: `${snap.weekStart} → ${snap.weekEnd}`,
     counts: countByState(snap.patients),
     workload: workloadLine(snap.patients),
-    dueToday: snap.patients.filter(isDueToday).length,
+    dueToday: snap.patients.filter((p) => isDueToday(p)).length,
     withPhone: snap.patients.filter((p) => p.phones.length > 0).length,
     withGeo: snap.patients.filter((p) => p.latitude != null).length,
   };
