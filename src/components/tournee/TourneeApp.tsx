@@ -324,6 +324,20 @@ export function TourneeApp({ initial }: { initial: TourneeSnapshot }) {
           });
           if (ok) setSheet({ kind: "none" });
         }}
+        onDelete={
+          sheet.kind === "patient" && sheet.patientId
+            ? async () => {
+                const ok = await api("/api/tournee/patients", {
+                  method: "DELETE",
+                  body: JSON.stringify({ patientId: sheet.patientId }),
+                });
+                if (ok) {
+                  setOpenId(null);
+                  setSheet({ kind: "none" });
+                }
+              }
+            : undefined
+        }
       />
 
       <TourneeSheet open={sheet.kind === "nearby"} title="Patients les plus proches" onClose={() => setSheet({ kind: "none" })}>
@@ -679,6 +693,7 @@ function PatientSheet({
   busy,
   onClose,
   onSave,
+  onDelete,
 }: {
   open: boolean;
   patient: TourneePatient | null;
@@ -694,6 +709,7 @@ function PatientSheet({
     endOfCare: string;
     notes: string;
   }) => Promise<void>;
+  onDelete?: () => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
@@ -774,6 +790,19 @@ function PatientSheet({
       <Field label="Notes" className="mt-3">
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="synapse-field w-full px-3 py-2 text-sm" />
       </Field>
+      {onDelete ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (!window.confirm("Retirer ce patient de la tournée ? Il passera en statut sorti (données conservées).")) return;
+            void onDelete();
+          }}
+          className="mt-5 w-full text-sm font-semibold text-danger disabled:opacity-40"
+        >
+          Supprimer le patient
+        </button>
+      ) : null}
     </TourneeSheet>
   );
 }

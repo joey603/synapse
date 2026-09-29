@@ -164,3 +164,44 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "save" }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  if (!isSameOrigin(request)) return NextResponse.json({ error: "invalid" }, { status: 403 });
+  const session = await getSession();
+  if (session.status !== "ok") return NextResponse.json({ error: "auth" }, { status: 401 });
+
+  let body: { patientId?: string };
+  try {
+    body = (await request.json()) as { patientId?: string };
+  } catch {
+    return NextResponse.json({ error: "invalid" }, { status: 400 });
+  }
+
+  const patientId = clip(body.patientId, 64);
+  if (!patientId) return NextResponse.json({ error: "invalid" }, { status: 400 });
+
+  const existing = await db.patient.findUnique({
+    where: { id: patientId },
+    select: { id: true, status: true },
+  });
+  if (!existing) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  try {
+    await db.patient.update({
+      where: { id: patientId },
+      data: { status: "DISCHARGED" },
+    });
+    await audit({
+      actorId: session.user.id,
+      action: "PATIENT_UPDATED",
+      entityType: "Patient",
+      entityId: patientId,
+      patientId,
+      metadata: { status: "DISCHARGED", source: "tournee" },
+    });
+    return NextResponse.json({ ok: true });
+  } catch {
+    logger.error("tournee.patient_delete_failed");
+    return NextResponse.json({ error: "save" }, { status: 500 });
+  }
+}
