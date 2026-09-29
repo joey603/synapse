@@ -254,7 +254,8 @@ function navItemsFor(pathname: string): NavItem[] {
   if (pathname === "/") {
     return [
       { key: "home", href: "/", label: "home", icon: HomeIcon, active: true },
-      { key: "patients", href: "/patients", label: "patients", icon: PeopleIcon },
+      // Patients masqué temporairement sur l’accueil — route /patients intacte.
+      // { key: "patients", href: "/patients", label: "patients", icon: PeopleIcon },
     ];
   }
 

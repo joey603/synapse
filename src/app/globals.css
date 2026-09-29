@@ -180,3 +180,17 @@ select {
     transform: translateX(360%);
   }
 }
+
+@keyframes synapse-alert-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+.synapse-alert-pulse {
+  animation: synapse-alert-pulse 1.6s ease-in-out infinite;
+}
