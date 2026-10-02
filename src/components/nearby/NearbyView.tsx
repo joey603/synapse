@@ -381,7 +381,13 @@ export function NearbyView({
                 }}
                 className="flex min-h-[4.5rem] w-full items-center gap-3 px-4 py-3 text-start active:bg-surface/70"
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent-strong">
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                    located
+                      ? "bg-[#9a4f3c] text-white"
+                      : "bg-accent-soft text-accent-strong"
+                  }`}
+                >
                   {located ? index + 1 : "–"}
                 </span>
                 <span className="min-w-0 flex-1">
