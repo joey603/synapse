@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 
 import { PatientCockpit } from "@/components/patient/PatientCockpit";
+import { RecalcPositionButton } from "@/components/patient/RecalcPositionButton";
 import { TaskPanel } from "@/components/tasks/TaskPanel";
 import { PatientDetailTabs } from "@/components/patient/PatientDetailTabs";
 import { PatientTimeline } from "@/components/patient/PatientTimeline";
@@ -113,6 +114,15 @@ export default async function PatientDetailPage({
           </Link>
         </div>
       </SurfaceCard>
+
+      <RecalcPositionButton
+        locale={locale}
+        patientId={patient.id}
+        address={patient.address}
+        city={patient.city}
+        latitude={patient.latitude}
+        longitude={patient.longitude}
+      />
 
       <PatientCockpit
         locale={locale}

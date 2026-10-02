@@ -3,13 +3,11 @@ import { NextResponse } from "next/server";
 import { getSession, isSameOrigin } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { haversineMeters } from "@/lib/geo/distance";
-import { wazeDriveSeconds } from "@/lib/geo/waze";
+import { driveSecondsTable, clearDriveCache } from "@/lib/geo/waze";
 import { logger } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const CONCURRENCY = 4;
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return NextResponse.json({ error: "origin" }, { status: 403 });
@@ -21,7 +19,9 @@ export async function POST(request: Request) {
     lat?: unknown;
     lng?: unknown;
     ids?: unknown;
+    refresh?: unknown;
   } | null;
+  if (body?.refresh === true) clearDriveCache();
   const from = point(body?.lat, body?.lng);
   if (!from) return NextResponse.json({ error: "coords" }, { status: 400 });
 
@@ -61,21 +61,17 @@ export async function POST(request: Request) {
   const groups = [...unique.values()];
   const groupTimes = new Map<string, number>();
 
-  for (let index = 0; index < groups.length; index += CONCURRENCY) {
-    const batch = groups.slice(index, index + CONCURRENCY);
-    const results = await Promise.all(
-      batch.map(async (group) => {
-        try {
-          const seconds = await wazeDriveSeconds(from, group.to);
-          return seconds == null ? null : { key: group.key, seconds };
-        } catch {
-          return null;
-        }
-      }),
+  try {
+    const durations = await driveSecondsTable(
+      from,
+      groups.map((group) => group.to),
     );
-    for (const result of results) {
-      if (result) groupTimes.set(result.key, result.seconds);
+    for (let index = 0; index < groups.length; index += 1) {
+      const seconds = durations[index];
+      if (seconds != null) groupTimes.set(groups[index]!.key, seconds);
     }
+  } catch {
+    logger.error("nearby.drive_eta_failed");
   }
 
   const times = located.flatMap((patient) => {
@@ -85,7 +81,7 @@ export async function POST(request: Request) {
   });
 
   if (times.length === 0 && located.length > 0) {
-    logger.error("nearby.waze_eta_failed");
+    logger.error("nearby.drive_eta_failed");
   }
 
   return NextResponse.json({

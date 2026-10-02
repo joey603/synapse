@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { haversineMeters } from "@/lib/geo/distance";
@@ -40,16 +41,15 @@ export function NearbyView({
   const [street, setStreet] = useState<string | null>(null);
   const [geo, setGeo] = useState<"idle" | "ready" | "denied">("idle");
   const [placing, setPlacing] = useState(needsResolve);
-  const [placeProgress, setPlaceProgress] = useState<string | null>(
-    needsResolve ? "Placement des adresses…" : null,
-  );
   const [times, setTimes] = useState<Record<string, number>>({});
   const [timing, setTiming] = useState(false);
+  const [etaNonce, setEtaNonce] = useState(0);
   const watchRef = useRef(0);
   const snapTimer = useRef(0);
   const lastRaw = useRef<{ lat: number; lng: number } | null>(null);
-  const lastEta = useRef<{ lat: number; lng: number; key: string } | null>(null);
+  const lastEta = useRef<{ lat: number; lng: number; key: string; nonce: number } | null>(null);
   const hasFix = useRef(false);
+  const placeAbort = useRef<AbortController | null>(null);
   const snapToStreetRef = useRef<(point: { lat: number; lng: number }) => Promise<void>>(async () => undefined);
 
   const showFix = useCallback((point: { lat: number; lng: number }) => {
@@ -146,63 +146,93 @@ export function NearbyView({
     };
   }, [showFix]);
 
-  useEffect(() => {
-    if (!needsResolve) return;
+  const resolvePlaces = useCallback(async (force: boolean) => {
+    placeAbort.current?.abort();
     const controller = new AbortController();
+    placeAbort.current = controller;
+
+    if (force) {
+      setPatients((current) =>
+        current.map((patient) => ({ ...patient, latitude: null, longitude: null })),
+      );
+      setTimes({});
+      lastEta.current = null;
+    }
+
+    setPlacing(true);
     let lastPending = Number.POSITIVE_INFINITY;
     let stalls = 0;
 
-    async function resolvePlaces() {
-      setPlacing(true);
-      setPlaceProgress("Placement des adresses…");
-      try {
-        for (let round = 0; round < 40; round += 1) {
-          if (controller.signal.aborted) break;
-          const response = await fetch("/api/nearby/resolve", {
-            method: "POST",
-            signal: controller.signal,
-          });
-          if (!response.ok) break;
-          const body = (await response.json()) as {
-            located?: Array<{ id: string; latitude: number; longitude: number }>;
-            pending?: number;
-          };
-          const located = new Map((body.located ?? []).map((pin) => [pin.id, pin]));
-          setPatients((current) =>
-            current.map((patient) => {
-              const pin = located.get(patient.id);
-              return pin ? { ...patient, latitude: pin.latitude, longitude: pin.longitude } : patient;
-            }),
-          );
-          const pending = body.pending ?? 0;
-          const done = (body.located ?? []).length;
-          setPlaceProgress(
-            pending > 0 ? `Placement des adresses… ${done} placés, ${pending} restants` : null,
-          );
-          if (pending === 0) break;
-          if (pending >= lastPending) {
-            stalls += 1;
-            if (stalls >= 5) break;
-          } else {
-            stalls = 0;
-            lastPending = pending;
-          }
-        }
-      } catch (error) {
-        if ((error as { name?: string } | null)?.name === "AbortError") return;
-      } finally {
-        if (!controller.signal.aborted) {
-          setPlacing(false);
-          setPlaceProgress(null);
+    try {
+      for (let round = 0; round < 40; round += 1) {
+        if (controller.signal.aborted) return;
+        const response = await fetch("/api/nearby/resolve", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(round === 0 && force ? { force: true } : {}),
+          signal: controller.signal,
+        });
+        if (!response.ok) break;
+        const body = (await response.json()) as {
+          located?: Array<{ id: string; latitude: number; longitude: number }>;
+          pending?: number;
+        };
+        const located = new Map((body.located ?? []).map((pin) => [pin.id, pin]));
+        setPatients((current) =>
+          current.map((patient) => {
+            const pin = located.get(patient.id);
+            return pin
+              ? { ...patient, latitude: pin.latitude, longitude: pin.longitude }
+              : force && round === 0
+                ? { ...patient, latitude: null, longitude: null }
+                : patient;
+          }),
+        );
+        const pending = body.pending ?? 0;
+        if (pending === 0) break;
+        if (pending >= lastPending) {
+          stalls += 1;
+          if (stalls >= 5) break;
+        } else {
+          stalls = 0;
+          lastPending = pending;
         }
       }
+    } catch (error) {
+      if ((error as { name?: string } | null)?.name === "AbortError") return;
+    } finally {
+      if (!controller.signal.aborted) {
+        setPlacing(false);
+        setEtaNonce((value) => value + 1);
+      }
     }
+  }, []);
 
-    void resolvePlaces();
+  useEffect(() => {
+    if (!needsResolve) return;
+    void resolvePlaces(false);
     return () => {
-      controller.abort();
+      placeAbort.current?.abort();
     };
-  }, [needsResolve]);
+  }, [needsResolve, resolvePlaces]);
+
+  // Estimation immédiate : l’UI n’attend pas OSRM pour afficher un temps.
+  useEffect(() => {
+    if (!here) return;
+    setTimes((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const patient of patients) {
+        if (patient.latitude == null || patient.longitude == null) continue;
+        if (next[patient.id] != null) continue;
+        next[patient.id] = estimateDriveSeconds(
+          haversineMeters(here, { lat: patient.latitude, lng: patient.longitude }),
+        );
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [here, patients]);
 
   useEffect(() => {
     if (!here) return;
@@ -211,59 +241,73 @@ export function NearbyView({
       .map((patient) => patient.id);
     if (locatedIds.length === 0) return;
     const locatedKey = locatedIds.join(",");
-    if (lastEta.current?.key === locatedKey && haversineMeters(lastEta.current, here) < 250) return;
+    if (
+      lastEta.current?.key === locatedKey &&
+      lastEta.current.nonce === etaNonce &&
+      haversineMeters(lastEta.current, here) < 250
+    ) {
+      return;
+    }
 
     const origin = here;
+    const refresh = etaNonce > 0 && lastEta.current?.nonce !== etaNonce;
     const controller = new AbortController();
     const id = window.setTimeout(() => {
-      lastEta.current = { ...origin, key: locatedKey };
+      lastEta.current = { ...origin, key: locatedKey, nonce: etaNonce };
       void (async () => {
         setTiming(true);
         try {
-          let missing = locatedIds;
-          for (let round = 0; round < 8 && missing.length > 0; round += 1) {
-            if (controller.signal.aborted) break;
-            const response = await fetch("/api/nearby/eta", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(round === 0 ? origin : { ...origin, ids: missing }),
-              signal: controller.signal,
-            });
-            if (!response.ok) break;
-            const body = (await response.json()) as {
-              times?: Array<{ id?: unknown; seconds?: unknown }>;
-              missing?: unknown;
-            };
-            const batch: Record<string, number> = {};
-            for (const item of body.times ?? []) {
-              const seconds = Number(item.seconds);
-              if (typeof item.id === "string" && Number.isFinite(seconds) && seconds > 0) {
-                batch[item.id] = seconds;
-              }
+          const response = await fetch("/api/nearby/eta", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...origin, refresh }),
+            signal: controller.signal,
+          });
+          if (!response.ok) return;
+          const body = (await response.json()) as {
+            times?: Array<{ id?: unknown; seconds?: unknown }>;
+          };
+          const batch: Record<string, number> = {};
+          for (const item of body.times ?? []) {
+            const seconds = Number(item.seconds);
+            if (typeof item.id === "string" && Number.isFinite(seconds) && seconds > 0) {
+              batch[item.id] = seconds;
             }
-            if (Object.keys(batch).length > 0) setTimes((current) => ({ ...current, ...batch }));
-            const still = Array.isArray(body.missing)
-              ? body.missing.filter((value): value is string => typeof value === "string")
-              : missing.filter((patientId) => batch[patientId] == null);
-            if (still.length === 0) break;
-            if (still.length >= missing.length && round > 0) {
-              await new Promise((resolve) => window.setTimeout(resolve, 700));
-            }
-            missing = still;
           }
+          if (Object.keys(batch).length > 0) setTimes((current) => ({ ...current, ...batch }));
         } catch (error) {
           if ((error as { name?: string } | null)?.name === "AbortError") return;
-          // L’itinéraire Waze reste disponible sans le temps.
         } finally {
           if (!controller.signal.aborted) setTiming(false);
         }
       })();
-    }, 900);
+    }, 250);
     return () => {
       window.clearTimeout(id);
       controller.abort();
     };
-  }, [here, patients]);
+  }, [here, patients, etaNonce]);
+
+  const onRecalc = useCallback(() => {
+    if (placing) return;
+    void (async () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const point = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
+            lastRaw.current = point;
+            void snapToStreetRef.current(point);
+          },
+          () => undefined,
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
+        );
+      }
+      await resolvePlaces(true);
+    })();
+  }, [placing, resolvePlaces]);
 
   const ordered = useMemo(() => {
     return [...patients].sort((a, b) => score(a, here, times) - score(b, here, times));
@@ -301,13 +345,24 @@ export function NearbyView({
           meLabel={t(locale, "nearbyMe")}
         />
       </div>
+      <div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          className="w-auto shrink-0 px-4"
+          disabled={placing}
+          onClick={onRecalc}
+        >
+          {placing ? t(locale, "nearbyRecalcBusy") : t(locale, "nearbyRecalc")}
+        </Button>
+      </div>
       {street ? (
         <p className="text-sm text-muted">
           {t(locale, "nearbyOnRoad")}
           {` · ${street}`}
         </p>
       ) : null}
-      {placeProgress ? <p className="text-sm text-muted">{placeProgress}</p> : null}
       {geo === "denied" && !here ? <p className="text-sm text-muted">{t(locale, "nearbyDenied")}</p> : null}
 
       <SurfaceCard>
@@ -342,9 +397,9 @@ export function NearbyView({
                 </span>
                 <span className="shrink-0 text-end">
                   {times[patient.id] != null ? (
-                    <span className="block text-sm font-semibold text-ink">{formatDrive(times[patient.id], locale)}</span>
-                  ) : located && timing ? (
-                    <span className="block text-sm text-faint">{t(locale, "nearbyTiming")}</span>
+                    <span className={`block text-sm font-semibold ${timing ? "text-faint" : "text-ink"}`}>
+                      {formatDrive(times[patient.id], locale)}
+                    </span>
                   ) : null}
                   <span className="block text-sm font-semibold text-accent">{t(locale, "nearbyItinerary")}</span>
                 </span>
@@ -369,7 +424,11 @@ function score(
 }
 
 function placeLine(patient: NearbyPatient) {
-  return [patient.address, patient.city].filter(Boolean).join(", ");
+  const address = (patient.address ?? "").trim();
+  const city = (patient.city ?? "").trim();
+  if (!address) return city;
+  if (!city || address === city || address.endsWith(city)) return address;
+  return `${address}, ${city}`;
 }
 
 function formatDrive(seconds: number, locale: Locale) {
@@ -379,4 +438,9 @@ function formatDrive(seconds: number, locale: Locale) {
   const rest = minutes % 60;
   if (locale === "he") return rest ? `${hours} שע׳ ${rest}` : `${hours} שע׳`;
   return rest ? `${hours} h ${rest}` : `${hours} h`;
+}
+
+/** ~28 km/h urbain — affiché tout de suite, remplacé par OSRM. */
+function estimateDriveSeconds(meters: number) {
+  return Math.max(60, Math.round((meters / 1000 / 28) * 3600));
 }

@@ -10,7 +10,12 @@ export function wazeNavigateHref(input: {
   if (lat != null && lng != null) {
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
   }
-  const q = [input.address, input.city].filter(Boolean).join(", ").trim();
+  const address = (input.address ?? "").trim();
+  const city = (input.city ?? "").trim();
+  const q =
+    !address ? city
+    : !city || address === city || address.endsWith(city) ? address
+    : `${address}, ${city}`;
   if (!q) return null;
   // Sans navigate : Waze cherche, l’utilisateur lance. `q` + navigate plante souvent.
   return `https://waze.com/ul?q=${encodeURIComponent(q)}`;

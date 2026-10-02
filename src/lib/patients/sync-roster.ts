@@ -7,6 +7,7 @@ import {
   normalizePhoneDigits,
   type RosterPatient,
 } from "@/lib/patients/tournee-roster";
+import { splitStreetAndAccess } from "@/lib/patients/parse-tournee-list";
 
 export type SyncRosterResult = {
   created: string[];
@@ -83,20 +84,38 @@ function rosterPayload(roster: RosterPatient) {
     roster.contactPhone ??
     (roster.phones.length > 1 ? roster.phones.slice(1).join(" / ") : null);
 
+  const rescued = rescueStreetAddress(roster.address, roster.city, roster.accessInstructions);
+
   return {
     firstName: roster.firstName,
     lastName: roster.lastName,
     city: roster.city,
-    address: roster.address,
+    address: rescued.address,
     phone: primary,
     contactName: roster.contactName,
     contactPhone: secondary,
-    accessInstructions: roster.accessInstructions,
+    accessInstructions: rescued.access,
     weeklyInPersonVisits: roster.homeQuota,
     weeklyVirtualVisits: roster.phoneQuota,
     operationalNote: roster.note,
     status: "ACTIVE" as const,
   };
+}
+
+/** Si address = ville mais l’accès commence par « רחוב … », on récupère la rue. */
+function rescueStreetAddress(address: string, city: string, access: string | null) {
+  const street = address.trim();
+  const town = city.trim();
+  const accessText = (access ?? "").trim();
+  const cityOnly = !street || street === town;
+  if (!cityOnly || !accessText) {
+    return { address: street, access: accessText || null };
+  }
+  const { street: rescued, access: rest } = splitStreetAndAccess(accessText);
+  if (!rescued || rescued === town) {
+    return { address: street, access: accessText || null };
+  }
+  return { address: rescued, access: rest || null };
 }
 
 function needsGeoReset(existing: DbPatient, next: ReturnType<typeof rosterPayload>) {

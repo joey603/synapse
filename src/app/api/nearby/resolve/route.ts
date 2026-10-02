@@ -16,6 +16,16 @@ export async function POST(request: Request) {
   const session = await getSession();
   if (session.status !== "ok") return NextResponse.json({ error: "auth" }, { status: 401 });
 
+  const body = (await request.json().catch(() => null)) as { force?: unknown } | null;
+  const force = body?.force === true;
+
+  if (force) {
+    await db.patient.updateMany({
+      where: { status: "ACTIVE", OR: [{ address: { not: null } }, { city: { not: null } }] },
+      data: { latitude: null, longitude: null, geoKey: null },
+    });
+  }
+
   const patients = await db.patient.findMany({
     where: { status: "ACTIVE", OR: [{ address: { not: null } }, { city: { not: null } }] },
     select: { id: true, address: true, city: true, latitude: true, longitude: true, geoKey: true },

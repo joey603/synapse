@@ -18,43 +18,41 @@ export function ShellChrome({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const tourneeHome = pathname === "/";
+  const home = pathname === "/";
 
   return (
-    <>
-      {tourneeHome ? null : (
-        <div className="px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
-          <div
-            dir="ltr"
-            className="grid grid-cols-[1fr_auto_1fr] items-center rounded-synapse-chrome border border-line/80 bg-card px-4 py-2 shadow-nav"
-          >
-            <PendingForm action="/api/auth/logout" className="justify-self-start">
-              <PendingButton
-                label={t(locale, "logout")}
-                idle={<LogoutIcon />}
-                pending={<LogoutIcon className="opacity-50" />}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-danger disabled:opacity-70"
-              />
-            </PendingForm>
-            <Link href="/" className="justify-self-center">
-              <Mark />
-            </Link>
-            <div className="justify-self-end">
-              <LocaleSwitch locale={locale} />
-            </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <div
+          dir="ltr"
+          className="grid grid-cols-[1fr_auto_1fr] items-center rounded-synapse-chrome border border-line/80 bg-card px-4 py-2 shadow-nav"
+        >
+          <PendingForm action="/api/auth/logout" className="justify-self-start">
+            <PendingButton
+              label={t(locale, "logout")}
+              idle={<LogoutIcon />}
+              pending={<LogoutIcon className="opacity-50" />}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-danger disabled:opacity-70"
+            />
+          </PendingForm>
+          <Link href="/" className="justify-self-center">
+            <Mark />
+          </Link>
+          <div className="justify-self-end">
+            <LocaleSwitch locale={locale} />
           </div>
         </div>
-      )}
+      </div>
       <main
         className={
-          tourneeHome
-            ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
-            : "flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 [-webkit-overflow-scrolling:touch]"
+          home
+            ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3 [-webkit-overflow-scrolling:touch]"
+            : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 [-webkit-overflow-scrolling:touch]"
         }
       >
         {children}
       </main>
-    </>
+    </div>
   );
 }
 

@@ -6,6 +6,10 @@ export function placeQuery(address: string | null, city: string | null) {
   const street = cleanPlacePart(address);
   const town = cleanPlacePart(city);
   if (!street && !town) return null;
+  // Évite « אשדוד, אשדוד, Israel » quand address = city.
+  if (street && town && (street === town || street.endsWith(town))) {
+    return `${street}, Israel`.slice(0, 240);
+  }
   return [street, town, "Israel"].filter(Boolean).join(", ").slice(0, 240);
 }
 

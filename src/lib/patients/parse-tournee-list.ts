@@ -40,6 +40,9 @@ const ACCESS_HINT =
 
 const ADDRESS_HINT = /רחוב|שד'|שדרות|יער|מוהליבר|לבונטין|מבצע|הפזית|המגילה|street|rue\b/i;
 
+const ACCESS_SPLIT =
+  /\s+(?=(?:קומה|דירה|דלת|קוד|🔑|כניסה|#\d+|code|étage|etage)(?:\s|$))/iu;
+
 const SKIP_HEADER =
   /^(ariel|tsabar|nombre patients|patients\s*:)/i;
 
@@ -207,12 +210,13 @@ export function parseTourneeList(raw: string): ParseTourneeListResult {
     const address = current.addressLines.join(", ").trim();
     const access = current.accessLines.join(", ").trim() || null;
     const note = current.notes.join(" · ").trim() || null;
+    // Ne jamais recopier la ville dans address → évite « אשדוד, אשדוד ».
     patients.push({
       key: current.header.key,
       firstName: current.header.firstName,
       lastName: current.header.lastName,
       city: current.header.city,
-      address: address || current.header.city,
+      address,
       accessInstructions: access,
       phones,
       contactName: current.contactName,
@@ -282,13 +286,21 @@ export function parseTourneeList(raw: string): ParseTourneeListResult {
       continue;
     }
 
+    // Rue d’abord : une ligne « רחוב … קומה … » ne doit pas tout partir en accès.
+    if (ADDRESS_HINT.test(line)) {
+      const { street, access } = splitStreetAndAccess(line);
+      if (street) current.addressLines.push(street);
+      if (access) current.accessLines.push(access);
+      continue;
+    }
+
     if (ACCESS_HINT.test(line)) {
       current.accessLines.push(line);
       continue;
     }
 
-    if (ADDRESS_HINT.test(line) || /[\u0590-\u05FF]/.test(line)) {
-      if (!current.addressLines.length || ADDRESS_HINT.test(line)) {
+    if (/[\u0590-\u05FF]/.test(line)) {
+      if (!current.addressLines.length) {
         current.addressLines.push(line);
       } else if (ACCESS_HINT.test(line)) {
         current.accessLines.push(line);
@@ -310,4 +322,17 @@ export function parseTourneeList(raw: string): ParseTourneeListResult {
   flush();
 
   return { patients, skippedLines, errors };
+}
+
+/** Sépare « רחוב X 14 אשדוד קומה 2 דירה 13 » → rue + accès. */
+export function splitStreetAndAccess(line: string) {
+  const cleaned = line.trim();
+  if (!ADDRESS_HINT.test(cleaned)) {
+    return { street: "", access: cleaned };
+  }
+  const parts = cleaned.split(ACCESS_SPLIT);
+  const street = (parts[0] ?? "").trim();
+  const access = parts.slice(1).join(" ").replace(/\s+/g, " ").trim();
+  if (street.length >= 3) return { street, access };
+  return { street: cleaned, access: "" };
 }

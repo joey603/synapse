@@ -37,21 +37,23 @@ export default async function HomePage() {
     day: "numeric",
     month: "long",
   }).format(new Date());
+  const dateShown =
+    dateLabel.charAt(0).toLocaleUpperCase(locale === "he" ? "he-IL" : "fr-FR") + dateLabel.slice(1);
 
   return (
-    <div className="relative flex flex-1 flex-col gap-5 pb-28">
+    <div className="flex flex-col gap-4">
       <header>
-        <p className="text-[13px] text-muted">{dateLabel.charAt(0).toLocaleUpperCase(locale === "he" ? "he-IL" : "fr-FR") + dateLabel.slice(1)}</p>
-        <h1 className="mt-1 text-[1.7rem] font-semibold leading-tight tracking-tight">
+        <p className="text-[13px] text-muted">{dateShown}</p>
+        <h1 className="mt-1 text-[1.55rem] font-semibold leading-tight tracking-tight sm:text-[1.7rem]">
           {name ? `${t(locale, "greeting")}, ${firstName(name)}` : t(locale, "greeting")}
         </h1>
       </header>
 
       <Link
         href="/nearby"
-        className="flex items-center gap-4 rounded-synapse-md bg-card p-4 ring-1 ring-line/70 synapse-transition active:bg-surface/40"
+        className="flex items-center gap-3 rounded-synapse-md bg-card p-3.5 ring-1 ring-line/70 synapse-transition active:bg-surface/40 sm:gap-4 sm:p-4"
       >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-synapse-sm bg-terra-soft text-terra">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-synapse-sm bg-terra-soft text-terra sm:h-12 sm:w-12">
           <PinIcon />
         </span>
         <span className="min-w-0 flex-1">
@@ -61,7 +63,7 @@ export default async function HomePage() {
         <ChevronIcon />
       </Link>
 
-      <section className="flex flex-col gap-2.5">
+      <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-[13px] font-semibold text-muted">{t(locale, "patientsTitle")}</h2>
           <p className="text-[13px] tabular-nums text-muted">{patients.length}</p>
@@ -73,7 +75,7 @@ export default async function HomePage() {
             <p className="mt-1 text-sm text-muted">Utilise le ＋ pour coller la liste de la semaine.</p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-synapse-md bg-card ring-1 ring-line/70">
+          <div className="rounded-synapse-md bg-card ring-1 ring-line/70">
             {patients.map((patient, index) => {
               const label = `${patient.firstName} ${patient.lastName}`.trim();
               const phone = patient.phone ?? patient.contactPhone;
@@ -86,12 +88,14 @@ export default async function HomePage() {
                   {index > 0 ? <div className="border-t border-line/70" /> : null}
                   <Link
                     href={`/patients/${patient.id}`}
-                    className="flex items-start gap-3 px-4 py-3.5 active:bg-surface/60"
+                    className="flex items-start gap-3 px-3.5 py-3 active:bg-surface/60 sm:px-4 sm:py-3.5"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                        <span className="text-[15px] font-semibold text-ink">{label}</span>
-                        {patient.city ? <span className="text-sm text-muted">{patient.city}</span> : null}
+                        <span className="text-[15px] font-semibold leading-snug text-ink">{label}</span>
+                        {patient.city ? (
+                          <span className="max-w-full truncate text-sm text-muted">{patient.city}</span>
+                        ) : null}
                         {quotas ? (
                           <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-strong">
                             {quotas}
@@ -99,9 +103,13 @@ export default async function HomePage() {
                         ) : null}
                       </span>
                       {patient.address ? (
-                        <span className="mt-0.5 block truncate text-sm text-muted">{patient.address}</span>
+                        <span className="mt-0.5 block truncate text-sm leading-snug text-muted">
+                          {patient.address}
+                        </span>
                       ) : null}
-                      {phone ? <span className="mt-0.5 block text-sm tabular-nums text-muted">{phone}</span> : null}
+                      {phone ? (
+                        <span className="mt-0.5 block text-sm tabular-nums text-muted">{phone}</span>
+                      ) : null}
                     </span>
                     <ChevronIcon />
                   </Link>
@@ -137,7 +145,7 @@ function PinIcon() {
 
 function ChevronIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-faint rtl:rotate-180" fill="none" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="mt-1 h-5 w-5 shrink-0 text-faint rtl:rotate-180" fill="none" aria-hidden="true">
       <path d="M9.5 7.5 14 12l-4.5 4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

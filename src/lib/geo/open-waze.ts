@@ -35,7 +35,12 @@ export async function openWazeNavigation(target: WazeTarget) {
     return true;
   }
 
-  const q = [target.address, target.city].filter(Boolean).join(", ").trim();
+  const address = (target.address ?? "").trim();
+  const city = (target.city ?? "").trim();
+  const q =
+    !address ? city
+    : !city || address === city || address.endsWith(city) ? address
+    : `${address}, ${city}`;
   if (!q) return false;
 
   if (isAppleMobile()) {
