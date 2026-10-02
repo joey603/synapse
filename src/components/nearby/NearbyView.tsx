@@ -40,6 +40,9 @@ export function NearbyView({
   const [street, setStreet] = useState<string | null>(null);
   const [geo, setGeo] = useState<"idle" | "ready" | "denied">("idle");
   const [placing, setPlacing] = useState(needsResolve);
+  const [placeProgress, setPlaceProgress] = useState<string | null>(
+    needsResolve ? "Placement des adresses…" : null,
+  );
   const [times, setTimes] = useState<Record<string, number>>({});
   const [timing, setTiming] = useState(false);
   const watchRef = useRef(0);
@@ -145,42 +148,59 @@ export function NearbyView({
 
   useEffect(() => {
     if (!needsResolve) return;
-    let stop = false;
+    const controller = new AbortController();
     let lastPending = Number.POSITIVE_INFINITY;
     let stalls = 0;
 
     async function resolvePlaces() {
-      // Assez de tours pour toute la liste (lots de 3), avec quelques reprises si Nominatim rate-limite.
-      for (let round = 0; round < 80 && !stop; round += 1) {
-        const response = await fetch("/api/nearby/resolve", { method: "POST" });
-        if (!response.ok || stop) break;
-        const body = (await response.json()) as {
-          located?: Array<{ id: string; latitude: number; longitude: number }>;
-          pending?: number;
-        };
-        const located = new Map((body.located ?? []).map((pin) => [pin.id, pin]));
-        setPatients((current) =>
-          current.map((patient) => {
-            const pin = located.get(patient.id);
-            return pin ? { ...patient, latitude: pin.latitude, longitude: pin.longitude } : patient;
-          }),
-        );
-        const pending = body.pending ?? 0;
-        if (pending === 0) break;
-        if (pending >= lastPending) {
-          stalls += 1;
-          if (stalls >= 5) break;
-        } else {
-          stalls = 0;
-          lastPending = pending;
+      setPlacing(true);
+      setPlaceProgress("Placement des adresses…");
+      try {
+        for (let round = 0; round < 40; round += 1) {
+          if (controller.signal.aborted) break;
+          const response = await fetch("/api/nearby/resolve", {
+            method: "POST",
+            signal: controller.signal,
+          });
+          if (!response.ok) break;
+          const body = (await response.json()) as {
+            located?: Array<{ id: string; latitude: number; longitude: number }>;
+            pending?: number;
+          };
+          const located = new Map((body.located ?? []).map((pin) => [pin.id, pin]));
+          setPatients((current) =>
+            current.map((patient) => {
+              const pin = located.get(patient.id);
+              return pin ? { ...patient, latitude: pin.latitude, longitude: pin.longitude } : patient;
+            }),
+          );
+          const pending = body.pending ?? 0;
+          const done = (body.located ?? []).length;
+          setPlaceProgress(
+            pending > 0 ? `Placement des adresses… ${done} placés, ${pending} restants` : null,
+          );
+          if (pending === 0) break;
+          if (pending >= lastPending) {
+            stalls += 1;
+            if (stalls >= 5) break;
+          } else {
+            stalls = 0;
+            lastPending = pending;
+          }
+        }
+      } catch (error) {
+        if ((error as { name?: string } | null)?.name === "AbortError") return;
+      } finally {
+        if (!controller.signal.aborted) {
+          setPlacing(false);
+          setPlaceProgress(null);
         }
       }
-      if (!stop) setPlacing(false);
     }
 
     void resolvePlaces();
     return () => {
-      stop = true;
+      controller.abort();
     };
   }, [needsResolve]);
 
@@ -194,6 +214,7 @@ export function NearbyView({
     if (lastEta.current?.key === locatedKey && haversineMeters(lastEta.current, here) < 250) return;
 
     const origin = here;
+    const controller = new AbortController();
     const id = window.setTimeout(() => {
       lastEta.current = { ...origin, key: locatedKey };
       void (async () => {
@@ -201,10 +222,12 @@ export function NearbyView({
         try {
           let missing = locatedIds;
           for (let round = 0; round < 8 && missing.length > 0; round += 1) {
+            if (controller.signal.aborted) break;
             const response = await fetch("/api/nearby/eta", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify(round === 0 ? origin : { ...origin, ids: missing }),
+              signal: controller.signal,
             });
             if (!response.ok) break;
             const body = (await response.json()) as {
@@ -228,15 +251,17 @@ export function NearbyView({
             }
             missing = still;
           }
-        } catch {
+        } catch (error) {
+          if ((error as { name?: string } | null)?.name === "AbortError") return;
           // L’itinéraire Waze reste disponible sans le temps.
         } finally {
-          setTiming(false);
+          if (!controller.signal.aborted) setTiming(false);
         }
       })();
     }, 900);
     return () => {
       window.clearTimeout(id);
+      controller.abort();
     };
   }, [here, patients]);
 
@@ -282,7 +307,7 @@ export function NearbyView({
           {` · ${street}`}
         </p>
       ) : null}
-      {placing ? <p className="text-sm text-muted">{t(locale, "nearbyGeoWait")}</p> : null}
+      {placeProgress ? <p className="text-sm text-muted">{placeProgress}</p> : null}
       {geo === "denied" && !here ? <p className="text-sm text-muted">{t(locale, "nearbyDenied")}</p> : null}
 
       <SurfaceCard>

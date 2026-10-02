@@ -36,7 +36,9 @@ export async function POST(request: Request) {
 
   const pending = patients.filter((patient) => {
     const key = placeKey(patient.address, patient.city);
-    return Boolean(key) && patient.geoKey !== key;
+    if (!key) return false;
+    // Adresse changée, ou jamais tentée (geoKey null) — y compris sans GPS.
+    return patient.geoKey !== key;
   });
 
   for (const [index, patient] of pending.slice(0, BATCH).entries()) {
@@ -49,16 +51,16 @@ export async function POST(request: Request) {
         where: { id: patient.id },
         data: point
           ? { latitude: point.latitude, longitude: point.longitude, geoKey: key }
-          : {
-              geoKey: key,
-              // On garde un point déjà trouvé : un échec Nominatim ne doit pas l’effacer.
-              ...(patient.latitude == null || patient.longitude == null
-                ? { latitude: null, longitude: null }
-                : {}),
-            },
+          : { geoKey: key },
       });
     } catch {
+      // Même en cas d’erreur inattendue, on marque la tentative pour débloquer l’UI.
       logger.error("nearby.geocode_failed");
+      try {
+        await db.patient.update({ where: { id: patient.id }, data: { geoKey: key } });
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -66,7 +68,12 @@ export async function POST(request: Request) {
     where: { status: "ACTIVE", OR: [{ address: { not: null } }, { city: { not: null } }] },
     select: { id: true, latitude: true, longitude: true, address: true, city: true, geoKey: true },
   });
-  const resolved = (patient: (typeof fresh)[number]) => patient.geoKey === placeKey(patient.address, patient.city);
+
+  const stillPending = fresh.filter((patient) => {
+    const key = placeKey(patient.address, patient.city);
+    if (!key) return false;
+    return patient.geoKey !== key;
+  }).length;
 
   return NextResponse.json({
     located: fresh
@@ -76,7 +83,7 @@ export async function POST(request: Request) {
         latitude: patient.latitude,
         longitude: patient.longitude,
       })),
-    pending: fresh.filter((patient) => placeKey(patient.address, patient.city) && !resolved(patient)).length,
+    pending: stillPending,
   });
 }
 

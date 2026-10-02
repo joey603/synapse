@@ -58,6 +58,9 @@ export function BottomNav({ locale }: { locale: Locale }) {
     };
   }, [patientId]);
 
+  // Accueil : pas de barre (liste patients déjà sur la page).
+  if (pathname === "/") return null;
+
   if (patientId && visitId) {
     return (
       <Shell>
@@ -98,6 +101,8 @@ export function BottomNav({ locale }: { locale: Locale }) {
     ...item,
     title: t(locale, item.label),
   }));
+
+  if (items.length === 0) return null;
 
   return (
     <Shell>
@@ -251,14 +256,7 @@ function VisitDeleteButton({
 }
 
 function navItemsFor(pathname: string): NavItem[] {
-  if (pathname === "/") {
-    return [
-      { key: "home", href: "/", label: "home", icon: HomeIcon, active: true },
-      // Patients masqué temporairement sur l’accueil — route /patients intacte.
-      // { key: "patients", href: "/patients", label: "patients", icon: PeopleIcon },
-    ];
-  }
-
+  // Pour l’instant : uniquement Accueil + Patients (hors fiche patient / visite).
   if (pathname === "/patients") {
     return [
       { key: "home", href: "/", label: "home", icon: HomeIcon },
@@ -266,70 +264,9 @@ function navItemsFor(pathname: string): NavItem[] {
     ];
   }
 
-  if (pathname.startsWith("/patients/new")) {
-    return [
-      { key: "back", back: true, fallback: "/patients", label: "navBack", icon: BackIcon },
-      { key: "search", href: "/search", label: "navSearch", icon: SearchIcon },
-    ];
-  }
-
-  if (pathname.startsWith("/nearby")) {
-    return [
-      { key: "back", back: true, fallback: "/", label: "navBack", icon: BackIcon },
-    ];
-  }
-
-  if (pathname.startsWith("/agenda")) {
-    return [
-      { key: "back", back: true, fallback: "/", label: "navBack", icon: BackIcon },
-      { key: "today", href: "/today", label: "actionToday", icon: CalendarIcon },
-      { key: "schedule", href: "/agenda#schedule", label: "navPlan", icon: PlusIcon, accent: true },
-    ];
-  }
-
-  if (pathname.startsWith("/today")) {
-    return [
-      { key: "back", back: true, fallback: "/", label: "navBack", icon: BackIcon },
-      { key: "agenda", href: "/agenda", label: "agendaTitle", icon: AgendaIcon },
-      { key: "tasks", href: "/tasks", label: "tasksTitle", icon: TasksIcon },
-    ];
-  }
-
-  if (pathname.startsWith("/tasks")) {
-    return [
-      { key: "back", back: true, fallback: "/", label: "navBack", icon: BackIcon },
-      { key: "today", href: "/today", label: "actionToday", icon: CalendarIcon },
-      { key: "validate", href: "/transmissions", label: "actionValidate", icon: CheckIcon },
-    ];
-  }
-
-  if (pathname.startsWith("/transmissions")) {
-    return [
-      { key: "back", back: true, fallback: "/", label: "navBack", icon: BackIcon },
-      { key: "today", href: "/today", label: "actionToday", icon: CalendarIcon },
-      { key: "visits", href: "/visits", label: "rowRecent", icon: ClockIcon },
-    ];
-  }
-
-  if (pathname.startsWith("/visits")) {
-    return [
-      { key: "back", back: true, fallback: "/", label: "navBack", icon: BackIcon },
-      { key: "today", href: "/today", label: "actionToday", icon: CalendarIcon },
-      { key: "validate", href: "/transmissions", label: "actionValidate", icon: CheckIcon },
-    ];
-  }
-
-  if (pathname.startsWith("/search")) {
-    return [
-      { key: "back", back: true, fallback: "/patients", label: "navBack", icon: BackIcon },
-      { key: "new", href: "/patients/new", label: "navNew", icon: PlusIcon, accent: true },
-      { key: "nearby", href: "/nearby", label: "nearbyShort", icon: PinIcon },
-    ];
-  }
-
   return [
-    { key: "back", back: true, fallback: "/", label: "navBack", icon: BackIcon },
     { key: "home", href: "/", label: "home", icon: HomeIcon },
+    { key: "patients", href: "/patients", label: "patients", icon: PeopleIcon },
   ];
 }
 
