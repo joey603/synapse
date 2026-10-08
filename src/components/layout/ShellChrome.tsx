@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { PendingButton, PendingForm } from "@/components/auth/PendingButton";
 import { Mark } from "@/components/brand/Mark";
@@ -19,35 +19,47 @@ export function ShellChrome({
 }) {
   const pathname = usePathname();
   const home = pathname === "/";
+  const [tripFocus, setTripFocus] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setTripFocus(document.documentElement.dataset.tripFocus === "1");
+    sync();
+    window.addEventListener("synapse-trip-focus", sync);
+    return () => window.removeEventListener("synapse-trip-focus", sync);
+  }, []);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <div
-          dir="ltr"
-          className="grid grid-cols-[1fr_auto_1fr] items-center rounded-synapse-chrome border border-line/80 bg-card px-4 py-2 shadow-nav"
-        >
-          <PendingForm action="/api/auth/logout" className="justify-self-start">
-            <PendingButton
-              label={t(locale, "logout")}
-              idle={<LogoutIcon />}
-              pending={<LogoutIcon className="opacity-50" />}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-danger disabled:opacity-70"
-            />
-          </PendingForm>
-          <Link href="/" className="justify-self-center">
-            <Mark />
-          </Link>
-          <div className="justify-self-end">
-            <LocaleSwitch locale={locale} />
+      {tripFocus ? null : (
+        <div className="shrink-0 px-4 pt-[max(0.5rem,env(safe-area-inset-top))]">
+          <div
+            dir="ltr"
+            className="grid grid-cols-[1fr_auto_1fr] items-center rounded-synapse-chrome border border-line/80 bg-card px-4 py-2 shadow-nav"
+          >
+            <PendingForm action="/api/auth/logout" className="justify-self-start">
+              <PendingButton
+                label={t(locale, "logout")}
+                idle={<LogoutIcon />}
+                pending={<LogoutIcon className="opacity-50" />}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full text-danger disabled:opacity-70"
+              />
+            </PendingForm>
+            <Link href="/" className="justify-self-center">
+              <Mark />
+            </Link>
+            <div className="justify-self-end">
+              <LocaleSwitch locale={locale} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
       <main
         className={
-          home
-            ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3 [-webkit-overflow-scrolling:touch]"
-            : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 [-webkit-overflow-scrolling:touch]"
+          tripFocus
+            ? "min-h-0 flex-1 overflow-hidden overscroll-none p-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            : home
+              ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-3 [-webkit-overflow-scrolling:touch]"
+              : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 [-webkit-overflow-scrolling:touch]"
         }
       >
         {children}

@@ -8,7 +8,8 @@ import { logger } from "@/lib/logger";
 
 export const runtime = "nodejs";
 
-const BATCH = 3;
+/** Google Geocoding tolère plus ; rester prudent pour le fallback Nominatim. */
+const BATCH = 8;
 
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return NextResponse.json({ error: "origin" }, { status: 403 });

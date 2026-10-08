@@ -63,6 +63,20 @@ export default async function HomePage() {
         <ChevronIcon />
       </Link>
 
+      <Link
+        href="/nearby-v2"
+        className="flex items-center gap-3 rounded-synapse-md bg-card p-3.5 ring-1 ring-line/70 synapse-transition active:bg-surface/40 sm:gap-4 sm:p-4"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-synapse-sm bg-accent-soft text-accent-strong sm:h-12 sm:w-12">
+          <PinIcon />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-semibold text-ink">{t(locale, "nearbyV2Title")}</span>
+          <span className="mt-0.5 block truncate text-sm text-muted">{t(locale, "nearbyV2Hint")}</span>
+        </span>
+        <ChevronIcon />
+      </Link>
+
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-[13px] font-semibold text-muted">{t(locale, "patientsTitle")}</h2>

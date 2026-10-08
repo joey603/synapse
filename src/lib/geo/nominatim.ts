@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cityCentroid } from "@/lib/geo/city-coords";
+import { geocodePlaceGoogle } from "@/lib/geo/google-geocode";
 import { placeQuery } from "@/lib/geo/place";
 
 const COARSE = new Set(["country", "state", "continent", "county"]);
@@ -8,6 +9,10 @@ const COARSE = new Set(["country", "state", "continent", "county"]);
 export async function geocodePlace(address: string | null, city: string | null) {
   const query = placeQuery(address, city);
   if (!query) return cityFallback(city);
+
+  // Google d’abord (rue précise) ; Nominatim en secours.
+  const google = await geocodePlaceGoogle(address, city);
+  if (google) return google;
 
   try {
     const url = new URL("https://nominatim.openstreetmap.org/search");

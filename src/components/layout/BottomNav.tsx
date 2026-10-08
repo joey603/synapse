@@ -36,6 +36,14 @@ export function BottomNav({ locale }: { locale: Locale }) {
   const patientId = patientIdFromPath(pathname);
   const visitId = visitIdFromPath(pathname);
   const [patient, setPatient] = useState<PatientNav | null>(null);
+  const [tripFocus, setTripFocus] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setTripFocus(document.documentElement.dataset.tripFocus === "1");
+    sync();
+    window.addEventListener("synapse-trip-focus", sync);
+    return () => window.removeEventListener("synapse-trip-focus", sync);
+  }, []);
 
   useEffect(() => {
     if (!patientId) {
@@ -60,6 +68,8 @@ export function BottomNav({ locale }: { locale: Locale }) {
 
   // Accueil : pas de barre (liste patients déjà sur la page).
   if (pathname === "/") return null;
+  // Carte trajet plein écran : masquer Accueil / Patients.
+  if (tripFocus) return null;
 
   if (patientId && visitId) {
     return (
